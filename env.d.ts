@@ -1,0 +1,13 @@
+interface CloudflareEnv {
+  DB: D1Database;
+  NEXTAUTH_SECRET: string;
+  NEXTAUTH_URL: string;
+  ENCRYPTION_KEY: string;
+  GOOGLE_ADS_CLIENT_ID: string;
+  GOOGLE_ADS_CLIENT_SECRET: string;
+  GOOGLE_ADS_DEVELOPER_TOKEN: string;
+  GOOGLE_ADS_MCC_ID?: string;
+  MICROSOFT_ADS_CLIENT_ID: string;
+  MICROSOFT_ADS_CLIENT_SECRET: string;
+  MICROSOFT_ADS_DEVELOPER_TOKEN: string;
+}
