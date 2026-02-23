@@ -2,6 +2,7 @@ export interface AIConfig {
   apiKey: string;
   model: string;
   baseUrl: string;
+  ignoreLocations?: boolean;
 }
 
 export const DEFAULT_MODEL = "gpt-4o-mini";

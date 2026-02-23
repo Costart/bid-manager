@@ -322,9 +322,13 @@ async function generateAdGroupForPage(
         ? `[LITE MODE] URL: ${targetUrl}, Title: ${pageData.title}, Desc: ${pageData.metaDesc}`
         : `URL: ${targetUrl}\nTitle: ${pageData.title}\nH1: ${pageData.h1}\nContent: ${pageData.content || fallbackInfo}`;
 
+      const locationRule = config.ignoreLocations
+        ? `\nIMPORTANT: Do NOT include any city names, region names, or geographic locations in keywords. Ignore any location references that appear in the page content (they are likely from geo-targeting, not the actual service).`
+        : "";
+
       const keywordPrompt = `You are a Google Ads Strategist.
 Page Context: ${context}
-
+${locationRule}
 Task:
 1. Define a campaign objective (e.g. Leads, Sales) - if not obvious, assume Leads.
 2. Name the Ad Group based on the URL slug "${slug}".
@@ -346,6 +350,10 @@ Respond with JSON in this exact format:
 
       const step1Result = await callAI(config, keywordPrompt, STEP_TIMEOUT_MS);
 
+      const adLocationRule = config.ignoreLocations
+        ? `\n- Do NOT include any city names, region names, or geographic locations in headlines or descriptions.`
+        : "";
+
       const creativePrompt = `You are a Google Ads Copywriter.
 Context: ${context}
 Keywords: ${step1Result.keywords.join(", ")}
@@ -355,7 +363,7 @@ Task: Write Responsive Search Ad (RSA) copy.
 STRICT RULES:
 - 5 Headlines: EXACTLY 30 characters or less. NO trailing periods.
 - 3 Descriptions: EXACTLY 90 characters or less.
-- If a line is too long, the system will reject it. Be concise.
+- If a line is too long, the system will reject it. Be concise.${adLocationRule}
 
 Respond with JSON in this exact format:
 {

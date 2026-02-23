@@ -42,6 +42,9 @@ export default function APISettings({ config, onSave }: APISettingsProps) {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [ignoreLocations, setIgnoreLocations] = useState(
+    config?.ignoreLocations ?? false,
+  );
   const [liveModels, setLiveModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsFetched, setModelsFetched] = useState(false);
@@ -72,6 +75,7 @@ export default function APISettings({ config, onSave }: APISettingsProps) {
       apiKey: apiKey.trim(),
       model: model.trim() || DEFAULT_MODEL,
       baseUrl: baseUrl.trim() || DEFAULT_BASE_URL,
+      ignoreLocations,
     };
 
     setSaving(true);
@@ -129,6 +133,9 @@ export default function APISettings({ config, onSave }: APISettingsProps) {
               API key configured
               {config.baseUrl !== DEFAULT_BASE_URL && (
                 <> &middot; {config.baseUrl}</>
+              )}
+              {config.ignoreLocations && (
+                <> &middot; Ignoring locations</>
               )}
             </p>
           </div>
@@ -294,6 +301,24 @@ export default function APISettings({ config, onSave }: APISettingsProps) {
             </div>
           )}
         </div>
+
+        <label className="flex items-center gap-2.5 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={ignoreLocations}
+            onChange={(e) => setIgnoreLocations(e.target.checked)}
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          <div>
+            <span className="text-xs font-bold text-slate-600 group-hover:text-slate-800 transition">
+              Ignore location references
+            </span>
+            <p className="text-[11px] text-slate-400">
+              Prevents city/region names from geo-targeted pages leaking into
+              keywords and ads.
+            </p>
+          </div>
+        </label>
 
         {saveError && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
