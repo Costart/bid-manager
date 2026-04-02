@@ -267,6 +267,29 @@ function getLanguageDisplayName(langCode: string): string {
   return langCode.toUpperCase();
 }
 
+// Common 2-3 letter language codes used as URL path prefixes
+const KNOWN_LANG_CODES = new Set([
+  "en", "es", "fr", "de", "it", "pt", "nl", "ru", "ja", "ko", "zh", "ar",
+  "hi", "th", "vi", "id", "ms", "tr", "pl", "cs", "sk", "hu", "ro", "bg",
+  "hr", "sr", "sl", "uk", "da", "sv", "no", "fi", "el", "he", "ca", "fil",
+  "et", "lv", "lt", "yue",
+]);
+
+function detectLangFromUrlPath(url: string): string | null {
+  try {
+    const pathname = new URL(url).pathname;
+    // Match first path segment: /en, /en/, /en/something
+    const match = pathname.match(/^\/([a-z]{2,3})(\/|$)/i);
+    if (match) {
+      const code = match[1].toLowerCase();
+      if (KNOWN_LANG_CODES.has(code)) return code;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export function groupUrlsByLanguage(
   urls: string[],
   hreflangMap: Map<string, HreflangEntry[]>,
@@ -291,14 +314,21 @@ export function groupUrlsByLanguage(
     }
   }
 
-  // If no hreflang data at all, return empty (caller treats as single-language site)
+  // Fallback: if no hreflang data, detect language from URL path prefixes (e.g. /en/, /es/)
+  if (urlToLang.size === 0) {
+    for (const url of urls) {
+      const lang = detectLangFromUrlPath(url);
+      if (lang) urlToLang.set(url, lang);
+    }
+  }
+
   if (urlToLang.size === 0) return [];
 
   // Group discovered URLs by language
   const groups = new Map<string, string[]>();
   for (const url of urls) {
     const lang = urlToLang.get(url);
-    if (!lang) continue; // URL not in hreflang data — skip (will be handled as default)
+    if (!lang) continue;
     if (!groups.has(lang)) groups.set(lang, []);
     groups.get(lang)!.push(url);
   }
