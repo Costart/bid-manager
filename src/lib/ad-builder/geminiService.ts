@@ -275,7 +275,7 @@ const KNOWN_LANG_CODES = new Set([
   "et", "lv", "lt", "yue",
 ]);
 
-function detectLangFromUrlPath(url: string): string | null {
+export function detectLangFromUrlPath(url: string): string | null {
   try {
     const pathname = new URL(url).pathname;
     // Match first path segment: /en, /en/, /en/something

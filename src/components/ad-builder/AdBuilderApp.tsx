@@ -6,6 +6,7 @@ import {
   generateSingleCampaign,
   batchFixAdCopy,
   groupUrlsByLanguage,
+  detectLangFromUrlPath,
 } from "@/lib/ad-builder/geminiService";
 import {
   buildTreeFromUrls,
@@ -528,16 +529,24 @@ export default function AdBuilderApp() {
         const fixedCampaigns = prev.campaigns.map((camp) => {
           if (!duplicateNames.has(camp.name)) return camp;
 
-          // If it has a language, use that as suffix
-          if (camp.language) {
-            const suffix = `[${camp.language.toUpperCase()}]`;
+          // Try to determine language: from campaign field, or infer from landing page URLs
+          let lang = camp.language;
+          if (!lang) {
+            const firstUrl = camp.adGroups[0]?.landingPageUrl;
+            if (firstUrl) {
+              lang = detectLangFromUrlPath(firstUrl) || undefined;
+            }
+          }
+
+          if (lang) {
+            const suffix = `[${lang.toUpperCase()}]`;
             if (!camp.name.includes(suffix)) {
-              return { ...camp, name: `${camp.name} ${suffix}` };
+              return { ...camp, name: `${camp.name} ${suffix}`, language: lang };
             }
             return camp;
           }
 
-          // Otherwise number them
+          // Last resort: number them
           const idx = (nameIndexes.get(camp.name) || 0) + 1;
           nameIndexes.set(camp.name, idx);
           return { ...camp, name: `${camp.name} (${idx})` };
