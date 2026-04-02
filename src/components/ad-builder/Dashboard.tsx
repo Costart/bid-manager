@@ -89,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       ? Math.round((progress.current / progress.total) * 100)
       : 0;
 
-  const complianceErrorCount = analysis.campaigns.reduce((total, camp) => {
+  const adCopyErrorCount = analysis.campaigns.reduce((total, camp) => {
     return (
       total +
       camp.adGroups.reduce((groupTotal, group) => {
@@ -103,6 +103,20 @@ const Dashboard: React.FC<DashboardProps> = ({
       }, 0)
     );
   }, 0);
+
+  const duplicateNameCount = (() => {
+    const names = new Map<string, number>();
+    analysis.campaigns.forEach((c) =>
+      names.set(c.name, (names.get(c.name) || 0) + 1),
+    );
+    let dupes = 0;
+    names.forEach((count) => {
+      if (count > 1) dupes += count;
+    });
+    return dupes;
+  })();
+
+  const complianceErrorCount = adCopyErrorCount + duplicateNameCount;
 
   return (
     <div className="space-y-6 h-full flex flex-col">

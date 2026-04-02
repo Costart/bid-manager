@@ -496,9 +496,62 @@ export default function AdBuilderApp() {
     if (!analysis || !aiConfig) return;
     setIsFixingCompliance(true);
     addLog(
-      "Scanning for compliance errors (Headlines > 30, Desc > 90)...",
+      "Scanning for compliance errors (Headlines > 30, Desc > 90, duplicate names)...",
       "info",
     );
+
+    // Fix duplicate campaign names first
+    const nameCounts = new Map<string, number>();
+    analysis.campaigns.forEach((camp) => {
+      nameCounts.set(camp.name, (nameCounts.get(camp.name) || 0) + 1);
+    });
+
+    const duplicateNames = new Set(
+      [...nameCounts.entries()]
+        .filter(([, count]) => count > 1)
+        .map(([name]) => name),
+    );
+
+    if (duplicateNames.size > 0) {
+      const dupeCount = [...duplicateNames.values()].reduce(
+        (sum, name) => sum + (nameCounts.get(name) || 0),
+        0,
+      );
+      addLog(
+        `Found ${dupeCount} campaigns with duplicate names. Fixing...`,
+        "warning",
+      );
+
+      setAnalysis((prev) => {
+        if (!prev) return null;
+        const nameIndexes = new Map<string, number>();
+        const fixedCampaigns = prev.campaigns.map((camp) => {
+          if (!duplicateNames.has(camp.name)) return camp;
+
+          // If it has a language, use that as suffix
+          if (camp.language) {
+            const suffix = `[${camp.language.toUpperCase()}]`;
+            if (!camp.name.includes(suffix)) {
+              return { ...camp, name: `${camp.name} ${suffix}` };
+            }
+            return camp;
+          }
+
+          // Otherwise number them
+          const idx = (nameIndexes.get(camp.name) || 0) + 1;
+          nameIndexes.set(camp.name, idx);
+          return { ...camp, name: `${camp.name} (${idx})` };
+        });
+        const updated = { ...prev, campaigns: fixedCampaigns };
+        saveProjectUpdate({ siteAnalysis: updated });
+        return updated;
+      });
+
+      addLog(
+        `Fixed ${dupeCount} duplicate campaign names.`,
+        "success",
+      );
+    }
 
     const invalidItems: {
       id: string;
@@ -535,8 +588,13 @@ export default function AdBuilderApp() {
       });
     });
 
+    if (invalidItems.length === 0 && duplicateNames.size === 0) {
+      addLog("Analysis passed: No compliance issues found.", "success");
+      setIsFixingCompliance(false);
+      return;
+    }
+
     if (invalidItems.length === 0) {
-      addLog("Analysis passed: No length violations found.", "success");
       setIsFixingCompliance(false);
       return;
     }
