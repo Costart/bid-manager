@@ -1,3 +1,14 @@
+export interface HreflangEntry {
+  url: string;
+  lang: string;
+}
+
+export interface LanguageGroup {
+  lang: string;
+  displayName: string;
+  urls: string[];
+}
+
 export interface AdGroup {
   id: string;
   name: string;
@@ -14,6 +25,8 @@ export interface Campaign {
   objective: string;
   adGroups: AdGroup[];
   totalEstimatedTraffic?: string;
+  language?: string;
+  languageDisplay?: string;
 }
 
 export interface FolderNode {
@@ -53,6 +66,7 @@ export interface MappingResult {
     depthsFound: number;
     topLevelFolders: string[];
   };
+  languageGroups?: LanguageGroup[];
 }
 
 export interface AIDebugInfo {

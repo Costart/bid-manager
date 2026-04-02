@@ -5,6 +5,7 @@ import {
   fetchRawUrls,
   generateSingleCampaign,
   batchFixAdCopy,
+  groupUrlsByLanguage,
 } from "@/lib/ad-builder/geminiService";
 import {
   buildTreeFromUrls,
@@ -18,6 +19,7 @@ import {
   ProcessLog,
   AIDebugInfo,
   AIHistoryEntry,
+  LanguageGroup,
 } from "@/lib/ad-builder/types";
 import { AIConfig, loadAIConfigFromServer } from "@/lib/ad-builder/aiConfig";
 import AnalysisForm from "@/components/ad-builder/AnalysisForm";
@@ -121,6 +123,8 @@ export default function AdBuilderApp() {
   const [projectName, setProjectName] = useState<string>("");
   const [discoveredUrls, setDiscoveredUrls] = useState<string[]>([]);
   const [existingPaths, setExistingPaths] = useState<string[]>([]);
+
+  const [languageGroups, setLanguageGroups] = useState<LanguageGroup[]>([]);
 
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
@@ -247,6 +251,7 @@ export default function AdBuilderApp() {
 
     try {
       let urls: string[] = [];
+      let detectedLanguages: LanguageGroup[] = [];
 
       if (rawUrls) {
         addLog(`Processing manual URL list...`, "success");
@@ -256,8 +261,17 @@ export default function AdBuilderApp() {
           .filter((u) => u.length > 0);
       } else {
         addLog(`Crawling sitemaps...`, "info");
-        urls = await fetchRawUrls(targetUrlFixed, inputSitemapUrl);
+        const result = await fetchRawUrls(targetUrlFixed, inputSitemapUrl);
+        urls = result.urls;
+        detectedLanguages = groupUrlsByLanguage(urls, result.hreflangMap);
+        if (detectedLanguages.length > 0) {
+          addLog(
+            `Detected ${detectedLanguages.length} languages: ${detectedLanguages.map((g) => `${g.displayName} (${g.urls.length} pages)`).join(", ")}`,
+            "success",
+          );
+        }
       }
+      setLanguageGroups(detectedLanguages);
 
       if (urls.length === 0) {
         throw new Error(
@@ -325,13 +339,30 @@ export default function AdBuilderApp() {
     }
   };
 
-  const handleGenerateAds = async (selectedPaths: string[]) => {
+  const handleGenerateAds = async (
+    selectedPaths: string[],
+    selectedLanguages?: LanguageGroup[],
+  ) => {
     if (!mappingResult || !aiConfig) return;
 
-    setTotalWork(selectedPaths.length);
+    // Use selected languages from FolderMapper, fall back to all detected, or null for single-lang
+    const langs =
+      selectedLanguages && selectedLanguages.length > 0
+        ? selectedLanguages
+        : languageGroups.length > 0
+          ? languageGroups
+          : [null];
+    const totalCampaigns = selectedPaths.length * langs.length;
+
+    setTotalWork(totalCampaigns);
     setStatus(AnalysisStatus.GENERATING);
+
+    const langInfo =
+      languageGroups.length > 0
+        ? ` across ${languageGroups.length} languages`
+        : "";
     addLog(
-      `Starting batched generation for ${selectedPaths.length} campaigns (${aiConfig.model})...`,
+      `Starting batched generation for ${totalCampaigns} campaigns${langInfo} (${aiConfig.model})...`,
       "info",
     );
 
@@ -339,85 +370,102 @@ export default function AdBuilderApp() {
 
     const initialAnalysis: SiteAnalysis = {
       siteName: mappingResult.siteName,
-      structureSummary: `Generated structure based on ${selectedPaths.length + existingCampaigns.length} sections.`,
+      structureSummary: `Generated structure based on ${totalCampaigns + existingCampaigns.length} sections.`,
       campaigns: [...existingCampaigns],
     };
     setAnalysis(initialAnalysis);
 
     let successCount = 0;
     let failCount = 0;
+    let campaignIndex = 0;
 
-    for (const [index, path] of selectedPaths.entries()) {
-      try {
-        const node = findNodeByPath(mappingResult.folders, path);
-        if (!node) {
-          addLog(`Skipping ${path} (Node not found)`, "warning");
-          continue;
-        }
+    for (const langGroup of langs) {
+      const langCode = langGroup?.lang;
+      const langLabel = langGroup
+        ? ` [${langGroup.displayName}]`
+        : "";
 
-        setCurrentProcessingEntity(node.name);
-        addLog(
-          `Generating Campaign ${index + 1}/${selectedPaths.length}: ${node.name}...`,
-          "info",
-        );
+      if (langGroup) {
+        addLog(`--- Generating ${langGroup.displayName} campaigns ---`, "info");
+      }
 
-        let startTime = Date.now();
-        let promptCaptured = "";
+      for (const path of selectedPaths) {
+        campaignIndex++;
+        try {
+          const node = findNodeByPath(mappingResult.folders, path);
+          if (!node) {
+            addLog(`Skipping ${path} (Node not found)`, "warning");
+            continue;
+          }
 
-        const campaign = await generateSingleCampaign(
-          aiConfig,
-          url,
-          mappingResult.siteName,
-          node,
-          (debugUpdate) => {
-            if (debugUpdate.fullPrompt) {
-              promptCaptured = debugUpdate.fullPrompt;
-            }
+          setCurrentProcessingEntity(`${node.name}${langLabel}`);
+          addLog(
+            `Generating Campaign ${campaignIndex}/${totalCampaigns}: ${node.name}${langLabel}...`,
+            "info",
+          );
 
-            setCurrentDebugInfo(
-              (prev) =>
-                ({
-                  ...(prev || {
-                    step: "IDLE",
-                    model: "",
-                    targetUrl: "",
-                    timestamp: 0,
-                  }),
+          let startTime = Date.now();
+          let promptCaptured = "";
+
+          const campaign = await generateSingleCampaign(
+            aiConfig,
+            url,
+            mappingResult.siteName,
+            node,
+            (debugUpdate) => {
+              if (debugUpdate.fullPrompt) {
+                promptCaptured = debugUpdate.fullPrompt;
+              }
+
+              setCurrentDebugInfo(
+                (prev) =>
+                  ({
+                    ...(prev || {
+                      step: "IDLE",
+                      model: "",
+                      targetUrl: "",
+                      timestamp: 0,
+                    }),
+                    ...debugUpdate,
+                  }) as AIDebugInfo,
+              );
+
+              if (
+                debugUpdate.step === "COMPLETE" ||
+                debugUpdate.step === "ERROR"
+              ) {
+                const entry: AIHistoryEntry = {
                   ...debugUpdate,
-                }) as AIDebugInfo,
-            );
+                  step: debugUpdate.step,
+                  model: debugUpdate.model || aiConfig.model,
+                  targetUrl: debugUpdate.targetUrl || "",
+                  timestamp: Date.now(),
+                  id: `log-${Date.now()}`,
+                  durationMs: Date.now() - startTime,
+                  fullPrompt: promptCaptured || debugUpdate.fullPrompt || "",
+                };
+                setAiHistory((prev) => [entry, ...prev]);
+              }
+            },
+            langCode,
+          );
 
-            if (
-              debugUpdate.step === "COMPLETE" ||
-              debugUpdate.step === "ERROR"
-            ) {
-              const entry: AIHistoryEntry = {
-                ...debugUpdate,
-                step: debugUpdate.step,
-                model: debugUpdate.model || aiConfig.model,
-                targetUrl: debugUpdate.targetUrl || "",
-                timestamp: Date.now(),
-                id: `log-${Date.now()}`,
-                durationMs: Date.now() - startTime,
-                fullPrompt: promptCaptured || debugUpdate.fullPrompt || "",
-              };
-              setAiHistory((prev) => [entry, ...prev]);
-            }
-          },
-        );
+          setAnalysis((prev) => {
+            if (!prev) return initialAnalysis;
+            const updated = {
+              ...prev,
+              campaigns: [...prev.campaigns, campaign],
+            };
+            saveProjectUpdate({ siteAnalysis: updated });
+            return updated;
+          });
 
-        setAnalysis((prev) => {
-          if (!prev) return initialAnalysis;
-          const updated = { ...prev, campaigns: [...prev.campaigns, campaign] };
-          saveProjectUpdate({ siteAnalysis: updated });
-          return updated;
-        });
-
-        successCount++;
-        addLog(`Completed: ${campaign.name}`, "success");
-      } catch (err: any) {
-        addLog(`Failed: ${path} - ${err.message}`, "warning");
-        failCount++;
+          successCount++;
+          addLog(`Completed: ${campaign.name}`, "success");
+        } catch (err: any) {
+          addLog(`Failed: ${path}${langLabel} - ${err.message}`, "warning");
+          failCount++;
+        }
       }
     }
 
@@ -569,6 +617,7 @@ export default function AdBuilderApp() {
     setProjectName("");
     setDiscoveredUrls([]);
     setExistingPaths([]);
+    setLanguageGroups([]);
     // Refresh project list
     try {
       const projects = await fetchProjects();
@@ -725,6 +774,7 @@ export default function AdBuilderApp() {
               : reset
           }
           existingPaths={existingPaths}
+          languageGroups={languageGroups}
         />
       )}
 

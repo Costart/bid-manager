@@ -508,8 +508,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                           >
                             <td className="py-4 px-6 align-top">
                               {gIdx === 0 && (
-                                <div className="font-bold text-slate-800 text-sm">
+                                <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
                                   {camp.name}
+                                  {camp.language && (
+                                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold uppercase">
+                                      {camp.language}
+                                    </span>
+                                  )}
                                 </div>
                               )}
                             </td>
@@ -682,8 +687,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                         : "border-slate-200 bg-white hover:border-slate-300"
                     }`}
                   >
-                    <div className="font-bold text-sm text-slate-800">
+                    <div className="font-bold text-sm text-slate-800 flex items-center gap-2">
                       {camp.name}
+                      {camp.language && (
+                        <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold uppercase">
+                          {camp.language}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-slate-400 mt-1">
                       {camp.adGroups.length} ad groups &middot; {camp.objective}
@@ -703,8 +713,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                   return (
                     <div className="space-y-6">
                       <div>
-                        <h3 className="text-xl font-bold text-slate-900">
+                        <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                           {camp.name}
+                          {camp.language && (
+                            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">
+                              {camp.languageDisplay || camp.language}
+                            </span>
+                          )}
                         </h3>
                         <p className="text-sm text-slate-500">
                           Objective: {camp.objective} &middot;{" "}

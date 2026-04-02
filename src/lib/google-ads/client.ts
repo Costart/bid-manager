@@ -195,6 +195,7 @@ export async function createCampaign(
   budgetResourceName: string,
   hasDSA: boolean,
   domainUrl?: string,
+  languageCode?: string,
 ): Promise<string> {
   const campaignBody: Record<string, unknown> = {
     name: campaignName,
@@ -216,7 +217,7 @@ export async function createCampaign(
       const domain = new URL(domainUrl).hostname.replace(/^www\./, "");
       campaignBody.dynamicSearchAdsSetting = {
         domainName: domain,
-        languageCode: "en",
+        languageCode: languageCode || "en",
       };
     } catch {
       // skip if URL parsing fails
@@ -237,6 +238,51 @@ export async function createCampaign(
   }
   const data = await res.json();
   return data.results[0].resourceName;
+}
+
+// Google Ads language criterion IDs: https://developers.google.com/google-ads/api/reference/data/codes-formats#languages
+const LANGUAGE_CRITERION_IDS: Record<string, string> = {
+  en: "1000", ar: "1019", bg: "1020", ca: "1038", zh: "1017", hr: "1039",
+  cs: "1021", da: "1009", nl: "1010", et: "1043", fil: "1042", fi: "1011",
+  fr: "1002", de: "1001", el: "1022", he: "1027", hi: "1023", hu: "1024",
+  id: "1025", it: "1004", ja: "1005", ko: "1012", lv: "1028", lt: "1029",
+  ms: "1102", no: "1013", pl: "1030", pt: "1014", ro: "1032", ru: "1031",
+  sr: "1035", sk: "1033", sl: "1034", es: "1003", sv: "1015", th: "1044",
+  tr: "1037", uk: "1036", vi: "1040",
+};
+
+export async function setCampaignLanguageTarget(
+  accessToken: string,
+  customerId: string,
+  campaignResourceName: string,
+  languageCode: string,
+): Promise<void> {
+  const criterionId = LANGUAGE_CRITERION_IDS[languageCode];
+  if (!criterionId) return; // Unknown language, skip targeting (defaults to all)
+
+  const res = await fetch(
+    `${BASE_URL}/customers/${customerId}/campaignCriteria:mutate`,
+    {
+      method: "POST",
+      headers: apiHeaders(accessToken),
+      body: JSON.stringify({
+        operations: [
+          {
+            create: {
+              campaign: campaignResourceName,
+              language: {
+                languageConstant: `languageConstants/${criterionId}`,
+              },
+            },
+          },
+        ],
+      }),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    console.warn(`Language targeting failed for ${languageCode}: ${text}`);
+  }
 }
 
 export async function createAdGroup(

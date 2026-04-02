@@ -13,6 +13,7 @@ import {
   addWebpageCriterion,
   createResponsiveSearchAd,
   createExpandedDynamicSearchAd,
+  setCampaignLanguageTarget,
 } from "@/lib/google-ads/client";
 import type { Campaign } from "@/lib/ad-builder/types";
 
@@ -98,7 +99,18 @@ export async function POST(request: Request) {
         budgetResource,
         hasDSA,
         domainUrl,
+        campaign.language,
       );
+
+      // Set language targeting if campaign has a specific language
+      if (campaign.language) {
+        await setCampaignLanguageTarget(
+          accessToken,
+          customerId,
+          campaignResource,
+          campaign.language,
+        );
+      }
 
       let adGroupCount = 0;
 

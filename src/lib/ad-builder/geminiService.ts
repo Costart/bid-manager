@@ -1,7 +1,15 @@
 import { AIConfig } from "./aiConfig";
-import { FolderNode, Campaign, AdGroup, AIDebugInfo } from "./types";
+import {
+  FolderNode,
+  Campaign,
+  AdGroup,
+  AIDebugInfo,
+  HreflangEntry,
+  LanguageGroup,
+} from "./types";
 
 const PROXIES = [
+  "/api/proxy?url=",
   "https://api.allorigins.win/raw?url=",
   "https://corsproxy.io/?",
   "https://api.codetabs.com/v1/proxy?quest=",
@@ -30,10 +38,11 @@ async function fetchWithTimeout(
 async function fetchUrlContent(targetUrl: string): Promise<string | null> {
   for (const proxy of PROXIES) {
     try {
+      const isOwnProxy = proxy.startsWith("/");
       const response = await fetchWithTimeout(
         proxy + encodeURIComponent(targetUrl),
         {},
-        6000,
+        isOwnProxy ? 12000 : 6000,
       );
       if (response.ok) {
         const text = await response.text();
@@ -102,9 +111,11 @@ async function extractPageData(url: string): Promise<ExtractedData> {
 function parseSitemapRaw(xmlContent: string): {
   urls: string[];
   sitemaps: string[];
+  hreflangMap: Map<string, HreflangEntry[]>;
 } {
   const urls: string[] = [];
   const sitemaps: string[] = [];
+  const hreflangMap = new Map<string, HreflangEntry[]>();
 
   const sitemapRegex = /<sitemap>[\s\S]*?<loc>(.*?)<\/loc>[\s\S]*?<\/sitemap>/g;
   let sitemapMatch;
@@ -112,10 +123,41 @@ function parseSitemapRaw(xmlContent: string): {
     if (sitemapMatch[1]) sitemaps.push(sitemapMatch[1].trim());
   }
 
-  const urlRegex = /<url>[\s\S]*?<loc>(.*?)<\/loc>[\s\S]*?<\/url>/g;
-  let urlMatch;
-  while ((urlMatch = urlRegex.exec(xmlContent)) !== null) {
-    if (urlMatch[1]) urls.push(urlMatch[1].trim());
+  // Match full <url> blocks to extract both <loc> and hreflang <xhtml:link> / <link> tags
+  const urlBlockRegex = /<url>([\s\S]*?)<\/url>/g;
+  let blockMatch;
+  while ((blockMatch = urlBlockRegex.exec(xmlContent)) !== null) {
+    const block = blockMatch[1];
+    const locMatch = block.match(/<loc>(.*?)<\/loc>/);
+    if (!locMatch?.[1]) continue;
+    const loc = locMatch[1].trim();
+    urls.push(loc);
+
+    // Parse hreflang links: <xhtml:link rel="alternate" hreflang="es" href="..." />
+    // Also handles <link rel="alternate" ...> without xhtml prefix
+    const hreflangRegex =
+      /<(?:xhtml:)?link[^>]*rel=["']alternate["'][^>]*hreflang=["']([^"']+)["'][^>]*href=["']([^"']+)["'][^>]*\/?>/g;
+    // Also try reversed attribute order: hreflang before rel
+    const hreflangRegex2 =
+      /<(?:xhtml:)?link[^>]*hreflang=["']([^"']+)["'][^>]*href=["']([^"']+)["'][^>]*\/?>/g;
+
+    const entries: HreflangEntry[] = [];
+    let hm: RegExpExecArray | null;
+    while ((hm = hreflangRegex.exec(block)) !== null) {
+      entries.push({ lang: hm[1].trim(), url: hm[2].trim() });
+    }
+    while ((hm = hreflangRegex2.exec(block)) !== null) {
+      // Avoid duplicates from first regex
+      const href = hm[2].trim();
+      const lang = hm[1].trim();
+      if (!entries.some((e) => e.url === href && e.lang === lang)) {
+        entries.push({ lang, url: href });
+      }
+    }
+
+    if (entries.length > 0) {
+      hreflangMap.set(loc, entries);
+    }
   }
 
   if (urls.length === 0 && sitemaps.length === 0) {
@@ -131,37 +173,41 @@ function parseSitemapRaw(xmlContent: string): {
     }
   }
 
-  return { urls, sitemaps };
+  return { urls, sitemaps, hreflangMap };
 }
 
 async function crawlSitemaps(
   startUrl: string,
   maxDepth = 2,
   currentDepth = 0,
-): Promise<string[]> {
+): Promise<{ urls: string[]; hreflangMap: Map<string, HreflangEntry[]> }> {
   const content = await fetchUrlContent(startUrl);
-  if (!content) return [];
+  if (!content) return { urls: [], hreflangMap: new Map() };
 
-  const { urls, sitemaps } = parseSitemapRaw(content);
-  let allUrls = [...urls];
+  const { urls, sitemaps, hreflangMap } = parseSitemapRaw(content);
+  const allUrls = [...urls];
+  const mergedMap = new Map(hreflangMap);
 
   if (sitemaps.length > 0 && currentDepth < maxDepth) {
     for (const subSitemap of sitemaps) {
-      const childUrls = await crawlSitemaps(
+      const child = await crawlSitemaps(
         subSitemap,
         maxDepth,
         currentDepth + 1,
       );
-      allUrls.push(...childUrls);
+      allUrls.push(...child.urls);
+      for (const [key, val] of child.hreflangMap) {
+        mergedMap.set(key, val);
+      }
     }
   }
-  return allUrls;
+  return { urls: allUrls, hreflangMap: mergedMap };
 }
 
 export const fetchRawUrls = async (
   url: string,
   sitemapUrl?: string,
-): Promise<string[]> => {
+): Promise<{ urls: string[]; hreflangMap: Map<string, HreflangEntry[]> }> => {
   let candidates: string[] = [];
   const baseUrl = url.replace(/\/$/, "");
 
@@ -185,14 +231,18 @@ export const fetchRawUrls = async (
 
   candidates = [...new Set(candidates)];
   let foundUrls: string[] = [];
+  const mergedHreflang = new Map<string, HreflangEntry[]>();
 
   for (const candidate of candidates) {
-    const discoveredUrls = await crawlSitemaps(candidate);
-    const validUrls = discoveredUrls.filter(
+    const result = await crawlSitemaps(candidate);
+    const validUrls = result.urls.filter(
       (u) =>
         u.startsWith("http") && !u.match(/\.(jpg|jpeg|png|gif|webp|pdf)$/i),
     );
     if (validUrls.length > 0) foundUrls.push(...validUrls);
+    for (const [key, val] of result.hreflangMap) {
+      mergedHreflang.set(key, val);
+    }
   }
 
   foundUrls = [...new Set(foundUrls)];
@@ -203,8 +253,65 @@ export const fetchRawUrls = async (
     );
   }
 
-  return foundUrls;
+  return { urls: foundUrls, hreflangMap: mergedHreflang };
 };
+
+function getLanguageDisplayName(langCode: string): string {
+  try {
+    const display = new Intl.DisplayNames(["en"], { type: "language" });
+    const name = display.of(langCode);
+    if (name && name !== langCode) return name;
+  } catch {
+    // fallback
+  }
+  return langCode.toUpperCase();
+}
+
+export function groupUrlsByLanguage(
+  urls: string[],
+  hreflangMap: Map<string, HreflangEntry[]>,
+): LanguageGroup[] {
+  // Build a url -> lang mapping from hreflang data
+  const urlToLang = new Map<string, string>();
+
+  for (const [sourceUrl, entries] of hreflangMap) {
+    for (const entry of entries) {
+      if (entry.lang === "x-default") continue;
+      // Normalize: just use the primary language subtag (e.g. "en-US" -> "en")
+      const primaryLang = entry.lang.split("-")[0].toLowerCase();
+      urlToLang.set(entry.url, primaryLang);
+    }
+    // If the source URL itself appears in its own hreflang list, it's already mapped.
+    // If not, try to infer from entries that point to it.
+    if (!urlToLang.has(sourceUrl)) {
+      const selfEntry = entries.find((e) => e.url === sourceUrl && e.lang !== "x-default");
+      if (selfEntry) {
+        urlToLang.set(sourceUrl, selfEntry.lang.split("-")[0].toLowerCase());
+      }
+    }
+  }
+
+  // If no hreflang data at all, return empty (caller treats as single-language site)
+  if (urlToLang.size === 0) return [];
+
+  // Group discovered URLs by language
+  const groups = new Map<string, string[]>();
+  for (const url of urls) {
+    const lang = urlToLang.get(url);
+    if (!lang) continue; // URL not in hreflang data — skip (will be handled as default)
+    if (!groups.has(lang)) groups.set(lang, []);
+    groups.get(lang)!.push(url);
+  }
+
+  // If only one language found, no need to split
+  if (groups.size <= 1) return [];
+
+  return Array.from(groups.entries()).map(([lang, langUrls]) => ({
+    lang,
+    displayName: getLanguageDisplayName(lang),
+    urls: langUrls,
+  }));
+}
 
 const GEMINI_THINKING_MODELS = ["gemini-2.5", "gemini-3"];
 
@@ -285,6 +392,7 @@ async function generateAdGroupForPage(
   slug: string,
   campaignObjective: string | undefined,
   onUpdate?: (info: Partial<AIDebugInfo> & { fullPrompt?: string }) => void,
+  language?: string,
 ): Promise<{ adGroup: AdGroup; objective: string }> {
   if (onUpdate)
     onUpdate({
@@ -326,9 +434,14 @@ async function generateAdGroupForPage(
         ? `\nIMPORTANT: Do NOT include any city names, region names, or geographic locations in keywords. Ignore any location references that appear in the page content (they are likely from geo-targeting, not the actual service).`
         : "";
 
+      const langDisplayName = language ? getLanguageDisplayName(language) : "";
+      const languageRule = language
+        ? `\nTarget Language: ${langDisplayName}\nIMPORTANT: Generate ALL keywords in ${langDisplayName}. The landing page is in ${langDisplayName}.`
+        : "";
+
       const keywordPrompt = `You are a Google Ads Strategist.
 Page Context: ${context}
-${locationRule}
+${locationRule}${languageRule}
 Task:
 1. Define a campaign objective (e.g. Leads, Sales) - if not obvious, assume Leads.
 2. Name the Ad Group based on the URL slug "${slug}".
@@ -354,6 +467,10 @@ Respond with JSON in this exact format:
         ? `\n- Do NOT include any city names, region names, or geographic locations in headlines or descriptions.`
         : "";
 
+      const adLanguageRule = language
+        ? `\n- Target Language: ${langDisplayName}. Write ALL headlines and descriptions in ${langDisplayName}.`
+        : "";
+
       const creativePrompt = `You are a Google Ads Copywriter.
 Context: ${context}
 Keywords: ${step1Result.keywords.join(", ")}
@@ -363,7 +480,7 @@ Task: Write Responsive Search Ad (RSA) copy.
 STRICT RULES:
 - 5 Headlines: EXACTLY 30 characters or less. NO trailing periods.
 - 3 Descriptions: EXACTLY 90 characters or less.
-- If a line is too long, the system will reject it. Be concise.${adLocationRule}
+- If a line is too long, the system will reject it. Be concise.${adLocationRule}${adLanguageRule}
 
 Respond with JSON in this exact format:
 {
@@ -467,6 +584,7 @@ export const generateSingleCampaign = async (
   siteName: string,
   node: FolderNode,
   onUpdate?: (info: Partial<AIDebugInfo> & { fullPrompt?: string }) => void,
+  language?: string,
 ): Promise<Campaign> => {
   let origin = baseUrl;
   try {
@@ -504,6 +622,7 @@ export const generateSingleCampaign = async (
         urlSlug,
         primaryObjective,
         onUpdate,
+        language,
       );
       generatedAdGroups.push(result.adGroup);
       if (i === 0) primaryObjective = result.objective;
@@ -519,6 +638,11 @@ export const generateSingleCampaign = async (
   }
 
   try {
+    const dsaLangDisplayName = language ? getLanguageDisplayName(language) : "";
+    const dsaLanguageRule = language
+      ? `\n- Target Language: ${dsaLangDisplayName}. Write ALL descriptions in ${dsaLangDisplayName}.`
+      : "";
+
     const dsaPrompt = `You are a Google Ads Copywriter.
 Campaign: "${node.name}" for ${siteName}
 Campaign objective: ${primaryObjective}
@@ -530,7 +654,7 @@ The descriptions should be generic enough to work for any page on this section o
 
 STRICT RULES:
 - 2 Descriptions: EXACTLY 90 characters or less each.
-- Do NOT include specific page names \u2014 keep it broad for the campaign section.
+- Do NOT include specific page names \u2014 keep it broad for the campaign section.${dsaLanguageRule}
 
 Respond with JSON in this exact format:
 {
@@ -564,10 +688,16 @@ Respond with JSON in this exact format:
     console.warn(`DSA generation failed for ${node.name}, skipping`, e);
   }
 
+  const campaignName = language
+    ? `${node.name} [${language.toUpperCase()}]`
+    : node.name;
+
   return {
-    id: `camp-${node.path.replace(/[^a-z0-9]/gi, "")}-${Date.now()}`,
-    name: node.name,
+    id: `camp-${node.path.replace(/[^a-z0-9]/gi, "")}-${language || "def"}-${Date.now()}`,
+    name: campaignName,
     objective: primaryObjective,
     adGroups: generatedAdGroups,
+    language,
+    languageDisplay: language ? getLanguageDisplayName(language) : undefined,
   };
 };

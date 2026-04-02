@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { FolderNode } from "@/lib/ad-builder/types";
+import { FolderNode, LanguageGroup } from "@/lib/ad-builder/types";
 import {
   Folder,
   FileText,
@@ -13,6 +13,7 @@ import {
   Circle,
   CheckSquare,
   Square,
+  Globe,
 } from "lucide-react";
 
 interface FolderMapperProps {
@@ -23,9 +24,10 @@ interface FolderMapperProps {
     depthsFound: number;
     topLevelFolders: string[];
   };
-  onConfirm: (selectedPaths: string[]) => void;
+  onConfirm: (selectedPaths: string[], selectedLanguages?: LanguageGroup[]) => void;
   onBack: () => void;
   existingPaths?: string[];
+  languageGroups?: LanguageGroup[];
 }
 
 interface FolderItemProps {
@@ -168,6 +170,7 @@ const FolderMapper: React.FC<FolderMapperProps> = ({
   onConfirm,
   onBack,
   existingPaths = [],
+  languageGroups = [],
 }) => {
   const existingPathsSet = new Set(existingPaths);
 
@@ -185,6 +188,26 @@ const FolderMapper: React.FC<FolderMapperProps> = ({
 
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
     new Set(["/"]),
+  );
+
+  const [selectedLangs, setSelectedLangs] = useState<Set<string>>(
+    () => new Set(languageGroups.map((g) => g.lang)),
+  );
+
+  const toggleLang = (lang: string) => {
+    setSelectedLangs((prev) => {
+      const next = new Set(prev);
+      if (next.has(lang)) {
+        next.delete(lang);
+      } else {
+        next.add(lang);
+      }
+      return next;
+    });
+  };
+
+  const activeLanguageGroups = languageGroups.filter((g) =>
+    selectedLangs.has(g.lang),
   );
 
   const handleToggleNode = (node: FolderNode) => {
@@ -248,7 +271,10 @@ const FolderMapper: React.FC<FolderMapperProps> = ({
   };
 
   const handleConfirm = () => {
-    onConfirm(Array.from(selectedPaths));
+    onConfirm(
+      Array.from(selectedPaths),
+      activeLanguageGroups.length > 0 ? activeLanguageGroups : undefined,
+    );
   };
 
   return (
@@ -301,7 +327,12 @@ const FolderMapper: React.FC<FolderMapperProps> = ({
             }
           `}
         >
-          <span>Generate {selectedPaths.size} Campaigns</span>
+          <span>
+            Generate{" "}
+            {activeLanguageGroups.length > 1
+              ? `${selectedPaths.size} x ${activeLanguageGroups.length} Languages`
+              : `${selectedPaths.size} Campaigns`}
+          </span>
           <Send className="w-4 h-4" />
         </button>
       </div>
@@ -316,6 +347,39 @@ const FolderMapper: React.FC<FolderMapperProps> = ({
           <span className="text-emerald-500">
             — select new paths below to add more
           </span>
+        </div>
+      )}
+
+      {languageGroups.length > 1 && (
+        <div className="px-6 py-3 bg-blue-50 border-b border-blue-100 flex items-center gap-3 text-sm shrink-0">
+          <Globe className="w-4 h-4 text-blue-600 shrink-0" />
+          <span className="text-blue-700 font-medium shrink-0">
+            {languageGroups.length} languages detected:
+          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {languageGroups.map((g) => (
+              <button
+                key={g.lang}
+                onClick={() => toggleLang(g.lang)}
+                className={`
+                  flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border transition-all
+                  ${
+                    selectedLangs.has(g.lang)
+                      ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                      : "bg-white border-slate-200 text-slate-400 hover:border-blue-300"
+                  }
+                `}
+              >
+                {selectedLangs.has(g.lang) ? (
+                  <CheckCircle2 className="w-3 h-3" />
+                ) : (
+                  <Circle className="w-3 h-3" />
+                )}
+                {g.displayName}
+                <span className="opacity-70">({g.urls.length})</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
