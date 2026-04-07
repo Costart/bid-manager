@@ -165,6 +165,28 @@ export default function AdBuilderApp() {
 
       if (p.site_analysis) {
         setAnalysis(p.site_analysis);
+        // Restore existing paths from saved data, enriched from campaign landing pages
+        const savedPaths = new Set<string>(p.selected_paths || []);
+        // Also derive paths from campaign landing page URLs for robustness
+        const siteAnalysis = p.site_analysis as SiteAnalysis;
+        for (const camp of siteAnalysis.campaigns || []) {
+          for (const ag of camp.adGroups || []) {
+            if (ag.landingPageUrl) {
+              try {
+                const pathname = new URL(ag.landingPageUrl).pathname;
+                // Add the parent path (campaign level) — e.g. /en/services from /en/services/web
+                const segments = pathname.split("/").filter(Boolean);
+                // Try different depths to match tree nodes
+                for (let i = 1; i <= segments.length; i++) {
+                  savedPaths.add("/" + segments.slice(0, i).join("/"));
+                }
+              } catch {
+                // ignore
+              }
+            }
+          }
+        }
+        setExistingPaths([...savedPaths]);
         setStatus(AnalysisStatus.COMPLETED);
       } else if (p.folder_tree) {
         const siteDisplayName = p.project_name;
