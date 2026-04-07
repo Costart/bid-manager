@@ -12,9 +12,12 @@ import type { Campaign } from "@/lib/ad-builder/types";
 
 interface CampaignResult {
   campaignName: string;
+  campaignId: string;
   success: boolean;
   adGroupCount: number;
   error?: string;
+  campaignResourceName?: string;
+  adGroupResourceMap?: Record<string, string>;
 }
 
 interface UploadResponse {
@@ -26,10 +29,16 @@ interface UploadResponse {
   };
 }
 
+export interface UploadedMapping {
+  campaignId: string;
+  campaignResourceName: string;
+  adGroupResourceMap: Record<string, string>;
+}
+
 interface GoogleAdsUploadProps {
   campaigns: Campaign[];
   disabled?: boolean;
-  onUploaded?: (uploadedCampaignIds: string[]) => void;
+  onUploaded?: (mappings: UploadedMapping[]) => void;
 }
 
 export default function GoogleAdsUpload({
@@ -66,17 +75,16 @@ export default function GoogleAdsUpload({
 
       setResult(data);
 
-      // Mark successful campaigns as uploaded
+      // Pass resource name mappings back for storage
       if (onUploaded) {
-        const successNames = new Set(
-          data.results
-            .filter((r: CampaignResult) => r.success)
-            .map((r: CampaignResult) => r.campaignName),
-        );
-        const uploadedIds = pendingCampaigns
-          .filter((c) => successNames.has(c.name))
-          .map((c) => c.id);
-        if (uploadedIds.length > 0) onUploaded(uploadedIds);
+        const mappings: UploadedMapping[] = data.results
+          .filter((r: CampaignResult) => r.success && r.campaignResourceName)
+          .map((r: CampaignResult) => ({
+            campaignId: r.campaignId,
+            campaignResourceName: r.campaignResourceName!,
+            adGroupResourceMap: r.adGroupResourceMap || {},
+          }));
+        if (mappings.length > 0) onUploaded(mappings);
       }
     } catch {
       setError("Network error. Please try again.");
@@ -125,17 +133,16 @@ export default function GoogleAdsUpload({
         },
       });
 
-      // Mark newly successful campaigns as uploaded
+      // Pass resource name mappings back for storage
       if (onUploaded) {
-        const successNames = new Set(
-          data.results
-            .filter((r: CampaignResult) => r.success)
-            .map((r: CampaignResult) => r.campaignName),
-        );
-        const uploadedIds = failedCampaigns
-          .filter((c) => successNames.has(c.name))
-          .map((c) => c.id);
-        if (uploadedIds.length > 0) onUploaded(uploadedIds);
+        const mappings: UploadedMapping[] = data.results
+          .filter((r: CampaignResult) => r.success && r.campaignResourceName)
+          .map((r: CampaignResult) => ({
+            campaignId: r.campaignId,
+            campaignResourceName: r.campaignResourceName!,
+            adGroupResourceMap: r.adGroupResourceMap || {},
+          }));
+        if (mappings.length > 0) onUploaded(mappings);
       }
     } catch {
       setError("Network error. Please try again.");

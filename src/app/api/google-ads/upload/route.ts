@@ -19,9 +19,12 @@ import type { Campaign } from "@/lib/ad-builder/types";
 
 interface CampaignResult {
   campaignName: string;
+  campaignId: string;
   success: boolean;
   adGroupCount: number;
   error?: string;
+  campaignResourceName?: string;
+  adGroupResourceMap?: Record<string, string>;
 }
 
 export async function POST(request: Request) {
@@ -113,6 +116,7 @@ export async function POST(request: Request) {
       }
 
       let adGroupCount = 0;
+      const adGroupResourceMap: Record<string, string> = {};
 
       for (const ag of campaign.adGroups) {
         try {
@@ -170,6 +174,7 @@ export async function POST(request: Request) {
             );
           }
 
+          adGroupResourceMap[ag.id] = adGroupResource;
           adGroupCount++;
         } catch (agErr) {
           console.error(
@@ -181,12 +186,16 @@ export async function POST(request: Request) {
 
       results.push({
         campaignName: campaign.name,
+        campaignId: campaign.id,
         success: true,
         adGroupCount,
+        campaignResourceName: campaignResource,
+        adGroupResourceMap,
       });
     } catch (err) {
       results.push({
         campaignName: campaign.name,
+        campaignId: campaign.id,
         success: false,
         adGroupCount: 0,
         error: err instanceof Error ? err.message : "Unknown error",

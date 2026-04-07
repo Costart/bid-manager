@@ -17,6 +17,7 @@ export interface AdGroup {
   descriptions: string[];
   landingPageUrl: string;
   isDSA?: boolean;
+  googleAdsResourceName?: string;
 }
 
 export interface Campaign {
@@ -28,6 +29,10 @@ export interface Campaign {
   language?: string;
   languageDisplay?: string;
   uploaded?: boolean;
+  googleAdsResourceName?: string;
+  googleAdsCustomerId?: string;
+  googleAdsStatus?: "ENABLED" | "PAUSED" | "REMOVED";
+  lastSyncedAt?: string;
 }
 
 export interface FolderNode {

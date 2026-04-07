@@ -575,3 +575,169 @@ ORDER BY metrics.conversions_value DESC`;
 
   return results;
 }
+
+// --- Sync: fetch campaign structure from Google Ads ---
+
+export interface SyncedAdGroup {
+  resourceName: string;
+  name: string;
+  status: string;
+  type: string;
+  keywords: { text: string; matchType: string }[];
+  headlines: string[];
+  descriptions: string[];
+  finalUrl: string;
+}
+
+export interface SyncedCampaign {
+  resourceName: string;
+  name: string;
+  status: string;
+  adGroups: SyncedAdGroup[];
+}
+
+async function gaqlSearch(
+  accessToken: string,
+  customerId: string,
+  query: string,
+): Promise<any[]> {
+  const allRows: any[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const body: Record<string, unknown> = { query };
+    if (pageToken) body.pageToken = pageToken;
+
+    const res = await fetch(
+      `${BASE_URL}/customers/${customerId}/googleAds:search`,
+      {
+        method: "POST",
+        headers: apiHeaders(accessToken),
+        body: JSON.stringify(body),
+      },
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`GAQL search failed: ${text}`);
+    }
+    const data = await res.json();
+    if (data.results) allRows.push(...data.results);
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return allRows;
+}
+
+export async function fetchCampaignsFromAds(
+  accessToken: string,
+  customerId: string,
+  campaignResourceNames: string[],
+): Promise<SyncedCampaign[]> {
+  if (campaignResourceNames.length === 0) return [];
+
+  const inClause = campaignResourceNames.map((r) => `'${r}'`).join(", ");
+
+  // Query 1: campaigns + ad groups + ads (headlines/descriptions/finalUrls)
+  const adsQuery = `
+    SELECT
+      campaign.resource_name,
+      campaign.name,
+      campaign.status,
+      ad_group.resource_name,
+      ad_group.name,
+      ad_group.status,
+      ad_group.type,
+      ad_group_ad.ad.responsive_search_ad.headlines,
+      ad_group_ad.ad.responsive_search_ad.descriptions,
+      ad_group_ad.ad.final_urls,
+      ad_group_ad.status
+    FROM ad_group_ad
+    WHERE campaign.resource_name IN (${inClause})
+      AND ad_group_ad.status != 'REMOVED'
+  `;
+
+  // Query 2: keywords
+  const kwQuery = `
+    SELECT
+      campaign.resource_name,
+      ad_group.resource_name,
+      ad_group_criterion.keyword.text,
+      ad_group_criterion.keyword.match_type,
+      ad_group_criterion.status
+    FROM ad_group_criterion
+    WHERE campaign.resource_name IN (${inClause})
+      AND ad_group_criterion.type = 'KEYWORD'
+      AND ad_group_criterion.status != 'REMOVED'
+  `;
+
+  const [adsRows, kwRows] = await Promise.all([
+    gaqlSearch(accessToken, customerId, adsQuery),
+    gaqlSearch(accessToken, customerId, kwQuery),
+  ]);
+
+  // Build campaign map
+  const campaignMap = new Map<string, SyncedCampaign>();
+  const adGroupMap = new Map<string, SyncedAdGroup>();
+
+  for (const row of adsRows) {
+    const campRes = row.campaign?.resourceName;
+    const campName = row.campaign?.name;
+    const campStatus = row.campaign?.status;
+
+    if (!campaignMap.has(campRes)) {
+      campaignMap.set(campRes, {
+        resourceName: campRes,
+        name: campName,
+        status: campStatus,
+        adGroups: [],
+      });
+    }
+
+    const agRes = row.adGroup?.resourceName;
+    if (agRes && !adGroupMap.has(agRes)) {
+      const ag: SyncedAdGroup = {
+        resourceName: agRes,
+        name: row.adGroup.name,
+        status: row.adGroup.status,
+        type: row.adGroup.type,
+        keywords: [],
+        headlines: [],
+        descriptions: [],
+        finalUrl: "",
+      };
+      adGroupMap.set(agRes, ag);
+      campaignMap.get(campRes)!.adGroups.push(ag);
+    }
+
+    // Extract RSA headlines/descriptions
+    const rsa = row.adGroupAd?.ad?.responsiveSearchAd;
+    if (rsa && agRes) {
+      const ag = adGroupMap.get(agRes)!;
+      if (rsa.headlines?.length > 0) {
+        ag.headlines = rsa.headlines.map((h: any) => h.text);
+      }
+      if (rsa.descriptions?.length > 0) {
+        ag.descriptions = rsa.descriptions.map((d: any) => d.text);
+      }
+    }
+
+    const finalUrls = row.adGroupAd?.ad?.finalUrls;
+    if (finalUrls?.length > 0 && agRes) {
+      adGroupMap.get(agRes)!.finalUrl = finalUrls[0];
+    }
+  }
+
+  // Merge keywords
+  for (const row of kwRows) {
+    const agRes = row.adGroup?.resourceName;
+    const ag = adGroupMap.get(agRes);
+    if (ag && row.adGroupCriterion?.keyword) {
+      ag.keywords.push({
+        text: row.adGroupCriterion.keyword.text,
+        matchType: row.adGroupCriterion.keyword.matchType,
+      });
+    }
+  }
+
+  return Array.from(campaignMap.values());
+}

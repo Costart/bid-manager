@@ -16,6 +16,7 @@ import {
 import {
   AnalysisStatus,
   SiteAnalysis,
+  Campaign,
   MappingResult,
   ProcessLog,
   AIDebugInfo,
@@ -684,16 +685,41 @@ export default function AdBuilderApp() {
     }
   };
 
-  const handleCampaignsUploaded = (campaignIds: string[]) => {
-    const idSet = new Set(campaignIds);
+  const handleCampaignsUploaded = (
+    mappings: {
+      campaignId: string;
+      campaignResourceName: string;
+      adGroupResourceMap: Record<string, string>;
+    }[],
+  ) => {
+    const mappingMap = new Map(mappings.map((m) => [m.campaignId, m]));
     setAnalysis((prev) => {
       if (!prev) return null;
       const updated = {
         ...prev,
-        campaigns: prev.campaigns.map((c) =>
-          idSet.has(c.id) ? { ...c, uploaded: true } : c,
-        ),
+        campaigns: prev.campaigns.map((c) => {
+          const mapping = mappingMap.get(c.id);
+          if (!mapping) return c;
+          return {
+            ...c,
+            uploaded: true,
+            googleAdsResourceName: mapping.campaignResourceName,
+            adGroups: c.adGroups.map((ag) => ({
+              ...ag,
+              googleAdsResourceName: mapping.adGroupResourceMap[ag.id] || ag.googleAdsResourceName,
+            })),
+          };
+        }),
       };
+      saveProjectUpdate({ siteAnalysis: updated });
+      return updated;
+    });
+  };
+
+  const handleCampaignsSynced = (updatedCampaigns: Campaign[]) => {
+    setAnalysis((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, campaigns: updatedCampaigns };
       saveProjectUpdate({ siteAnalysis: updated });
       return updated;
     });
@@ -957,6 +983,7 @@ export default function AdBuilderApp() {
             isFixing={isFixingCompliance}
             onFixCompliance={handleFixCompliance}
             onCampaignsUploaded={handleCampaignsUploaded}
+            onCampaignsSynced={handleCampaignsSynced}
             progress={{
               current:
                 analysis.campaigns.length -

@@ -12,6 +12,7 @@ import { exportToGoogleAdsCSV } from "@/lib/ad-builder/csvExporter";
 import { useGoogleAdsStatus } from "@/lib/hooks/use-google-ads";
 import GoogleAdsConnect from "@/components/ad-builder/GoogleAdsConnect";
 import GoogleAdsUpload from "@/components/ad-builder/GoogleAdsUpload";
+import GoogleAdsSync from "@/components/ad-builder/GoogleAdsSync";
 import {
   ChevronRight,
   ChevronDown,
@@ -37,7 +38,8 @@ interface DashboardProps {
   isGenerating?: boolean;
   isFixing?: boolean;
   onFixCompliance?: () => void;
-  onCampaignsUploaded?: (campaignIds: string[]) => void;
+  onCampaignsUploaded?: (mappings: import("@/components/ad-builder/GoogleAdsUpload").UploadedMapping[]) => void;
+  onCampaignsSynced?: (updatedCampaigns: Campaign[]) => void;
   progress?: {
     current: number;
     total: number;
@@ -55,6 +57,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   isFixing = false,
   onFixCompliance,
   onCampaignsUploaded,
+  onCampaignsSynced,
   progress,
   debugInfo,
   aiHistory,
@@ -252,15 +255,22 @@ const Dashboard: React.FC<DashboardProps> = ({
               />
               {googleAds.status.connected &&
                 googleAds.status.selectedCustomerId && (
-                  <GoogleAdsUpload
-                    campaigns={analysis.campaigns}
-                    disabled={
-                      isGenerating ||
-                      isFixing ||
-                      analysis.campaigns.length === 0
-                    }
-                    onUploaded={onCampaignsUploaded}
-                  />
+                  <>
+                    <GoogleAdsSync
+                      campaigns={analysis.campaigns}
+                      disabled={isGenerating || isFixing}
+                      onSynced={onCampaignsSynced}
+                    />
+                    <GoogleAdsUpload
+                      campaigns={analysis.campaigns}
+                      disabled={
+                        isGenerating ||
+                        isFixing ||
+                        analysis.campaigns.length === 0
+                      }
+                      onUploaded={onCampaignsUploaded}
+                    />
+                  </>
                 )}
             </div>
           </div>
@@ -535,6 +545,15 @@ const Dashboard: React.FC<DashboardProps> = ({
                                   {camp.uploaded && (
                                     <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">
                                       Pushed
+                                    </span>
+                                  )}
+                                  {camp.googleAdsStatus && camp.googleAdsStatus !== "ENABLED" && (
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                      camp.googleAdsStatus === "PAUSED"
+                                        ? "bg-amber-100 text-amber-700"
+                                        : "bg-red-100 text-red-700"
+                                    }`}>
+                                      {camp.googleAdsStatus}
                                     </span>
                                   )}
                                 </div>
