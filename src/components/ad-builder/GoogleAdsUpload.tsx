@@ -29,17 +29,23 @@ interface UploadResponse {
 interface GoogleAdsUploadProps {
   campaigns: Campaign[];
   disabled?: boolean;
+  onUploaded?: (uploadedCampaignIds: string[]) => void;
 }
 
 export default function GoogleAdsUpload({
   campaigns,
   disabled = false,
+  onUploaded,
 }: GoogleAdsUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<UploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const pendingCampaigns = campaigns.filter((c) => !c.uploaded);
+
   const handleUpload = async () => {
+    if (pendingCampaigns.length === 0) return;
+
     setUploading(true);
     setError(null);
     setResult(null);
@@ -48,7 +54,7 @@ export default function GoogleAdsUpload({
       const res = await fetch("/api/google-ads/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaigns }),
+        body: JSON.stringify({ campaigns: pendingCampaigns }),
       });
 
       const data = await res.json();
@@ -59,6 +65,19 @@ export default function GoogleAdsUpload({
       }
 
       setResult(data);
+
+      // Mark successful campaigns as uploaded
+      if (onUploaded) {
+        const successNames = new Set(
+          data.results
+            .filter((r: CampaignResult) => r.success)
+            .map((r: CampaignResult) => r.campaignName),
+        );
+        const uploadedIds = pendingCampaigns
+          .filter((c) => successNames.has(c.name))
+          .map((c) => c.id);
+        if (uploadedIds.length > 0) onUploaded(uploadedIds);
+      }
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -71,7 +90,7 @@ export default function GoogleAdsUpload({
     const failedNames = new Set(
       result.results.filter((r) => !r.success).map((r) => r.campaignName),
     );
-    const failedCampaigns = campaigns.filter((c) =>
+    const failedCampaigns = pendingCampaigns.filter((c) =>
       failedNames.has(c.name),
     );
     if (failedCampaigns.length === 0) return;
@@ -97,7 +116,7 @@ export default function GoogleAdsUpload({
       setResult({
         results: [...prevSuccessful, ...data.results],
         summary: {
-          total: campaigns.length,
+          total: pendingCampaigns.length,
           succeeded:
             prevSuccessful.length +
             data.results.filter((r: CampaignResult) => r.success).length,
@@ -105,6 +124,19 @@ export default function GoogleAdsUpload({
             .length,
         },
       });
+
+      // Mark newly successful campaigns as uploaded
+      if (onUploaded) {
+        const successNames = new Set(
+          data.results
+            .filter((r: CampaignResult) => r.success)
+            .map((r: CampaignResult) => r.campaignName),
+        );
+        const uploadedIds = failedCampaigns
+          .filter((c) => successNames.has(c.name))
+          .map((c) => c.id);
+        if (uploadedIds.length > 0) onUploaded(uploadedIds);
+      }
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -181,10 +213,12 @@ export default function GoogleAdsUpload({
     );
   }
 
+  const alreadyUploaded = campaigns.length - pendingCampaigns.length;
+
   return (
     <button
       onClick={handleUpload}
-      disabled={disabled || uploading || campaigns.length === 0}
+      disabled={disabled || uploading || pendingCampaigns.length === 0}
       className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {uploading ? (
@@ -192,7 +226,16 @@ export default function GoogleAdsUpload({
       ) : (
         <CloudUpload className="w-3.5 h-3.5" />
       )}
-      {uploading ? "Uploading..." : "Push to Google Ads"}
+      {uploading
+        ? "Uploading..."
+        : pendingCampaigns.length === 0
+          ? `All ${campaigns.length} Pushed`
+          : `Push ${pendingCampaigns.length} New to Google Ads`}
+      {alreadyUploaded > 0 && pendingCampaigns.length > 0 && (
+        <span className="bg-white/20 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+          {alreadyUploaded} already pushed
+        </span>
+      )}
     </button>
   );
 }

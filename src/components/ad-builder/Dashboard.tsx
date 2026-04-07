@@ -37,6 +37,7 @@ interface DashboardProps {
   isGenerating?: boolean;
   isFixing?: boolean;
   onFixCompliance?: () => void;
+  onCampaignsUploaded?: (campaignIds: string[]) => void;
   progress?: {
     current: number;
     total: number;
@@ -53,6 +54,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   isGenerating = false,
   isFixing = false,
   onFixCompliance,
+  onCampaignsUploaded,
   progress,
   debugInfo,
   aiHistory,
@@ -257,6 +259,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       isFixing ||
                       analysis.campaigns.length === 0
                     }
+                    onUploaded={onCampaignsUploaded}
                   />
                 )}
             </div>
@@ -527,6 +530,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                                   {camp.language && (
                                     <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold uppercase">
                                       {camp.language}
+                                    </span>
+                                  )}
+                                  {camp.uploaded && (
+                                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">
+                                      Pushed
                                     </span>
                                   )}
                                 </div>

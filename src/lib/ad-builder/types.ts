@@ -27,6 +27,7 @@ export interface Campaign {
   totalEstimatedTraffic?: string;
   language?: string;
   languageDisplay?: string;
+  uploaded?: boolean;
 }
 
 export interface FolderNode {

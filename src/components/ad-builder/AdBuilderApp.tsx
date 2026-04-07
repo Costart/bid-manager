@@ -662,6 +662,21 @@ export default function AdBuilderApp() {
     }
   };
 
+  const handleCampaignsUploaded = (campaignIds: string[]) => {
+    const idSet = new Set(campaignIds);
+    setAnalysis((prev) => {
+      if (!prev) return null;
+      const updated = {
+        ...prev,
+        campaigns: prev.campaigns.map((c) =>
+          idSet.has(c.id) ? { ...c, uploaded: true } : c,
+        ),
+      };
+      saveProjectUpdate({ siteAnalysis: updated });
+      return updated;
+    });
+  };
+
   const handleRescan = () => {
     setStatus(AnalysisStatus.IDLE);
     setMappingResult(null);
@@ -855,6 +870,7 @@ export default function AdBuilderApp() {
             isGenerating={status === AnalysisStatus.GENERATING}
             isFixing={isFixingCompliance}
             onFixCompliance={handleFixCompliance}
+            onCampaignsUploaded={handleCampaignsUploaded}
             progress={{
               current:
                 analysis.campaigns.length -
