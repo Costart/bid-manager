@@ -699,13 +699,77 @@ export default function AdBuilderApp() {
     });
   };
 
-  const handleRescan = () => {
-    setStatus(AnalysisStatus.IDLE);
-    setMappingResult(null);
+  const handleRescan = async () => {
+    if (!url) {
+      setStatus(AnalysisStatus.IDLE);
+      setMappingResult(null);
+      setLogs([]);
+      setError(null);
+      setCurrentProcessingEntity(undefined);
+      setCurrentDebugInfo(undefined);
+      return;
+    }
+
+    // Re-scan directly — skip the form, rebuild tree, keep existing campaigns
+    setStatus(AnalysisStatus.MAPPING);
     setLogs([]);
     setError(null);
     setCurrentProcessingEntity(undefined);
     setCurrentDebugInfo(undefined);
+
+    addLog(`Re-scanning ${url}...`, "info");
+
+    try {
+      const result = await fetchRawUrls(url, sitemapUrl);
+      const urls = result.urls;
+      const detectedLanguages = groupUrlsByLanguage(urls, result.hreflangMap);
+      if (detectedLanguages.length > 0) {
+        addLog(
+          `Detected ${detectedLanguages.length} languages: ${detectedLanguages.map((g) => `${g.displayName} (${g.urls.length} pages)`).join(", ")}`,
+          "success",
+        );
+      }
+      setLanguageGroups(detectedLanguages);
+
+      addLog(`Discovered ${urls.length} pages.`, "success");
+
+      const siteDisplayName = url
+        .replace(/^https?:\/\/(www\.)?/, "")
+        .split("/")[0]
+        .toUpperCase();
+      const folders = buildTreeFromUrls(urls, siteDisplayName);
+      const stats = getStats(folders);
+
+      addLog(
+        `Mapping complete: ${stats.maxDepth} levels identified.`,
+        "success",
+      );
+
+      setMappingResult({
+        siteName: siteDisplayName,
+        folders,
+        stats: {
+          totalUrls: urls.length,
+          depthsFound: stats.maxDepth,
+          topLevelFolders: stats.topLevels,
+        },
+      });
+      setDiscoveredUrls(urls);
+
+      if (projectId) {
+        const allUrls = [...new Set([...discoveredUrls, ...urls])];
+        saveProjectUpdate({
+          discoveredUrls: allUrls,
+          folderTree: folders,
+        });
+      }
+
+      setStatus(AnalysisStatus.SELECTING);
+    } catch (err: any) {
+      addLog(`Re-scan failed: ${err.message}`, "warning");
+      setError(err.message || "Re-scan failed.");
+      setStatus(AnalysisStatus.ERROR);
+    }
   };
 
   const reset = async () => {
