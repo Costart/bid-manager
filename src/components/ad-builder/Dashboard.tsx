@@ -111,7 +111,16 @@ const Dashboard: React.FC<DashboardProps> = ({
         const descErrors = (group.descriptions || []).filter(
           (d) => d.length > 90,
         ).length;
-        return groupTotal + headlineErrors + descErrors;
+        const sitelinkErrors = (group.sitelinks || []).reduce((acc, sl) => {
+          return acc +
+            (sl.linkText.length > 25 ? 1 : 0) +
+            (sl.description1.length > 35 ? 1 : 0) +
+            (sl.description2.length > 35 ? 1 : 0);
+        }, 0);
+        const calloutErrors = (group.callouts || []).filter(
+          (c) => c.length > 25,
+        ).length;
+        return groupTotal + headlineErrors + descErrors + sitelinkErrors + calloutErrors;
       }, 0)
     );
   }, 0);

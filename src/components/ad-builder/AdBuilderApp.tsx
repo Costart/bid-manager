@@ -616,6 +616,51 @@ export default function AdBuilderApp() {
       );
     }
 
+    // Fix sitelink/callout length violations (simple truncation, no AI needed)
+    let extensionFixCount = 0;
+    setAnalysis((prev) => {
+      if (!prev) return null;
+      const fixed = {
+        ...prev,
+        campaigns: prev.campaigns.map((camp) => ({
+          ...camp,
+          adGroups: camp.adGroups.map((group) => {
+            let changed = false;
+            const fixedSitelinks = group.sitelinks?.map((sl) => {
+              const f = {
+                linkText: sl.linkText.length > 25 ? sl.linkText.slice(0, 25) : sl.linkText,
+                description1: sl.description1.length > 35 ? sl.description1.slice(0, 35) : sl.description1,
+                description2: sl.description2.length > 35 ? sl.description2.slice(0, 35) : sl.description2,
+                finalUrl: sl.finalUrl,
+              };
+              if (f.linkText !== sl.linkText || f.description1 !== sl.description1 || f.description2 !== sl.description2) {
+                changed = true;
+                extensionFixCount++;
+              }
+              return f;
+            });
+            const fixedCallouts = group.callouts?.map((c) => {
+              if (c.length > 25) {
+                changed = true;
+                extensionFixCount++;
+                return c.slice(0, 25);
+              }
+              return c;
+            });
+            if (!changed) return group;
+            return { ...group, sitelinks: fixedSitelinks, callouts: fixedCallouts };
+          }),
+        })),
+      };
+      if (extensionFixCount > 0) {
+        saveProjectUpdate({ siteAnalysis: fixed });
+      }
+      return fixed;
+    });
+    if (extensionFixCount > 0) {
+      addLog(`Trimmed ${extensionFixCount} sitelink/callout items to fit limits.`, "success");
+    }
+
     const invalidItems: {
       id: string;
       text: string;

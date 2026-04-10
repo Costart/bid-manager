@@ -521,8 +521,8 @@ export async function addSitelinks(
         linkText: sl.linkText.slice(0, 25),
         description1: sl.description1.slice(0, 35),
         description2: sl.description2.slice(0, 35),
+        finalUrls: [sl.finalUrl],
       },
-      finalUrls: [sl.finalUrl],
     },
   }));
 
