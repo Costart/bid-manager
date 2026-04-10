@@ -14,6 +14,8 @@ import {
   createResponsiveSearchAd,
   createExpandedDynamicSearchAd,
   setCampaignLanguageTarget,
+  addSitelinks,
+  addCallouts,
 } from "@/lib/google-ads/client";
 import type { Campaign } from "@/lib/ad-builder/types";
 
@@ -172,6 +174,39 @@ export async function POST(request: Request) {
               path1,
               path2,
             );
+          }
+
+          // Add sitelinks and callouts if present
+          if (ag.sitelinks && ag.sitelinks.length > 0) {
+            try {
+              await addSitelinks(
+                accessToken,
+                customerId,
+                adGroupResource,
+                ag.sitelinks,
+              );
+            } catch (slErr) {
+              console.warn(
+                `Sitelinks for "${ag.name}" failed:`,
+                slErr instanceof Error ? slErr.message : slErr,
+              );
+            }
+          }
+
+          if (ag.callouts && ag.callouts.length > 0) {
+            try {
+              await addCallouts(
+                accessToken,
+                customerId,
+                adGroupResource,
+                ag.callouts,
+              );
+            } catch (coErr) {
+              console.warn(
+                `Callouts for "${ag.name}" failed:`,
+                coErr instanceof Error ? coErr.message : coErr,
+              );
+            }
           }
 
           adGroupResourceMap[ag.id] = adGroupResource;

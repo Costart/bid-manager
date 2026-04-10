@@ -538,11 +538,57 @@ Respond with JSON in this exact format:
         (d: string) => cleanAdCopy(d, 90),
       );
 
+      // Step 3: Generate sitelinks and callouts
+      const sitelinkLanguageRule = language
+        ? `\n- Write ALL text in ${langDisplayName}.`
+        : "";
+
+      const sitelinkPrompt = `You are a Google Ads Extensions Specialist.
+Context: ${context}
+Landing Page: ${targetUrl}
+
+Task: Generate 4 sitelinks and 4 callouts for this ad group.
+
+SITELINKS — each sitelink needs:
+- linkText: Max 25 characters. A compelling link title.
+- description1: Max 35 characters. First description line.
+- description2: Max 35 characters. Second description line.
+- finalUrl: Use "${targetUrl}" as the base, append a relevant anchor or path if applicable, otherwise use the landing page URL.
+
+CALLOUTS — each callout:
+- Max 25 characters. Short value propositions or features from the page.${sitelinkLanguageRule}
+
+Respond with JSON in this exact format:
+{
+  "sitelinks": [
+    { "linkText": "Link Text", "description1": "First line", "description2": "Second line", "finalUrl": "${targetUrl}" }
+  ],
+  "callouts": ["Callout 1", "Callout 2", "Callout 3", "Callout 4"]
+}`;
+
+      let sitelinks: { linkText: string; description1: string; description2: string; finalUrl: string }[] = [];
+      let callouts: string[] = [];
+
+      try {
+        const step3Result = await callAI(config, sitelinkPrompt, STEP_TIMEOUT_MS);
+        sitelinks = (step3Result.sitelinks || []).map((sl: any) => ({
+          linkText: cleanAdCopy(sl.linkText || "", 25),
+          description1: cleanAdCopy(sl.description1 || "", 35),
+          description2: cleanAdCopy(sl.description2 || "", 35),
+          finalUrl: sl.finalUrl || targetUrl,
+        }));
+        callouts = (step3Result.callouts || []).map((c: string) =>
+          cleanAdCopy(c, 25),
+        );
+      } catch (e) {
+        console.warn(`Sitelink/callout generation failed for ${targetUrl}, skipping`, e);
+      }
+
       if (onUpdate)
         onUpdate({
           step: "COMPLETE",
           rawResponse: JSON.stringify(
-            { ...step1Result, ...step2Result },
+            { ...step1Result, ...step2Result, sitelinks, callouts },
             null,
             2,
           ),
@@ -558,6 +604,8 @@ Respond with JSON in this exact format:
           headlines: cleanHeadlines,
           descriptions: cleanDescriptions,
           landingPageUrl: targetUrl,
+          sitelinks: sitelinks.length > 0 ? sitelinks : undefined,
+          callouts: callouts.length > 0 ? callouts : undefined,
         },
       };
     } catch (e: any) {

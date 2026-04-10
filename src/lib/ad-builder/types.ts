@@ -10,6 +10,13 @@ export interface LanguageGroup {
   source: "hreflang" | "path";
 }
 
+export interface Sitelink {
+  linkText: string;
+  description1: string;
+  description2: string;
+  finalUrl: string;
+}
+
 export interface AdGroup {
   id: string;
   name: string;
@@ -19,6 +26,8 @@ export interface AdGroup {
   landingPageUrl: string;
   isDSA?: boolean;
   googleAdsResourceName?: string;
+  sitelinks?: Sitelink[];
+  callouts?: string[];
 }
 
 export interface Campaign {

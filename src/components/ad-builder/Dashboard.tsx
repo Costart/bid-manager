@@ -891,6 +891,47 @@ const Dashboard: React.FC<DashboardProps> = ({
                             </div>
                           )}
 
+                          {group.sitelinks && group.sitelinks.length > 0 && (
+                            <div>
+                              <p className="text-xs font-bold text-slate-500 mb-1">
+                                Sitelinks
+                              </p>
+                              <div className="space-y-1">
+                                {group.sitelinks.map((sl, i) => (
+                                  <div
+                                    key={i}
+                                    className="text-xs bg-slate-50 border border-slate-100 rounded px-2 py-1"
+                                  >
+                                    <span className="font-medium text-blue-700">
+                                      {sl.linkText}
+                                    </span>
+                                    <span className="text-slate-400 ml-2">
+                                      {sl.description1} · {sl.description2}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {group.callouts && group.callouts.length > 0 && (
+                            <div>
+                              <p className="text-xs font-bold text-slate-500 mb-1">
+                                Callouts
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {group.callouts.map((co, i) => (
+                                  <span
+                                    key={i}
+                                    className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100"
+                                  >
+                                    {co}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           <div className="text-xs text-slate-400">
                             Landing:{" "}
                             <a

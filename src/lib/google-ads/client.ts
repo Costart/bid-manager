@@ -506,6 +506,125 @@ export async function createExpandedDynamicSearchAd(
   }
 }
 
+export async function addSitelinks(
+  accessToken: string,
+  customerId: string,
+  adGroupResourceName: string,
+  sitelinks: { linkText: string; description1: string; description2: string; finalUrl: string }[],
+): Promise<void> {
+  if (sitelinks.length === 0) return;
+
+  // Create sitelink assets
+  const assetOps = sitelinks.map((sl) => ({
+    create: {
+      sitelinkAsset: {
+        linkText: sl.linkText.slice(0, 25),
+        description1: sl.description1.slice(0, 35),
+        description2: sl.description2.slice(0, 35),
+      },
+      finalUrls: [sl.finalUrl],
+    },
+  }));
+
+  const assetRes = await fetch(
+    `${BASE_URL}/customers/${customerId}/assets:mutate`,
+    {
+      method: "POST",
+      headers: apiHeaders(accessToken),
+      body: JSON.stringify({ operations: assetOps }),
+    },
+  );
+  if (!assetRes.ok) {
+    const text = await assetRes.text();
+    console.warn(`Sitelink asset creation failed: ${text}`);
+    return;
+  }
+  const assetData = await assetRes.json();
+  const assetResourceNames: string[] = (assetData.results || []).map(
+    (r: any) => r.resourceName,
+  );
+
+  // Link assets to ad group
+  const linkOps = assetResourceNames.map((resourceName) => ({
+    create: {
+      adGroup: adGroupResourceName,
+      asset: resourceName,
+      fieldType: "SITELINK",
+    },
+  }));
+
+  const linkRes = await fetch(
+    `${BASE_URL}/customers/${customerId}/adGroupAssets:mutate`,
+    {
+      method: "POST",
+      headers: apiHeaders(accessToken),
+      body: JSON.stringify({ operations: linkOps }),
+    },
+  );
+  if (!linkRes.ok) {
+    const text = await linkRes.text();
+    console.warn(`Sitelink ad group link failed: ${text}`);
+  }
+}
+
+export async function addCallouts(
+  accessToken: string,
+  customerId: string,
+  adGroupResourceName: string,
+  callouts: string[],
+): Promise<void> {
+  if (callouts.length === 0) return;
+
+  // Create callout assets
+  const assetOps = callouts.map((text) => ({
+    create: {
+      calloutAsset: {
+        calloutText: text.slice(0, 25),
+      },
+    },
+  }));
+
+  const assetRes = await fetch(
+    `${BASE_URL}/customers/${customerId}/assets:mutate`,
+    {
+      method: "POST",
+      headers: apiHeaders(accessToken),
+      body: JSON.stringify({ operations: assetOps }),
+    },
+  );
+  if (!assetRes.ok) {
+    const text = await assetRes.text();
+    console.warn(`Callout asset creation failed: ${text}`);
+    return;
+  }
+  const assetData = await assetRes.json();
+  const assetResourceNames: string[] = (assetData.results || []).map(
+    (r: any) => r.resourceName,
+  );
+
+  // Link assets to ad group
+  const linkOps = assetResourceNames.map((resourceName) => ({
+    create: {
+      adGroup: adGroupResourceName,
+      asset: resourceName,
+      fieldType: "CALLOUT",
+    },
+  }));
+
+  const linkRes = await fetch(
+    `${BASE_URL}/customers/${customerId}/adGroupAssets:mutate`,
+    {
+      method: "POST",
+      headers: apiHeaders(accessToken),
+      body: JSON.stringify({ operations: linkOps }),
+    },
+  );
+  if (!linkRes.ok) {
+    const text = await linkRes.text();
+    console.warn(`Callout ad group link failed: ${text}`);
+  }
+}
+
 const DATE_RANGE_MAP: Record<number, string> = {
   7: "LAST_7_DAYS",
   14: "LAST_14_DAYS",
