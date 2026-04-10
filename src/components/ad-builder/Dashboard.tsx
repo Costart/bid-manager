@@ -29,6 +29,7 @@ import {
   FileJson,
   History,
   ShieldCheck,
+  StopCircle,
 } from "lucide-react";
 
 interface DashboardProps {
@@ -41,6 +42,7 @@ interface DashboardProps {
   onCampaignsUploaded?: (mappings: import("@/components/ad-builder/GoogleAdsUpload").UploadedMapping[]) => void;
   onCampaignsSynced?: (updatedCampaigns: Campaign[]) => void;
   onRenameCampaign?: (campaignId: string, newName: string) => void;
+  onStopGeneration?: () => void;
   progress?: {
     current: number;
     total: number;
@@ -60,6 +62,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   onCampaignsUploaded,
   onCampaignsSynced,
   onRenameCampaign,
+  onStopGeneration,
   progress,
   debugInfo,
   aiHistory,
@@ -379,9 +382,20 @@ const Dashboard: React.FC<DashboardProps> = ({
           <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
             <div className="flex justify-between text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">
               <span>Building Campaign Hierarchy...</span>
-              <span>
-                {progress.current} of {progress.total} Campaigns
-              </span>
+              <div className="flex items-center gap-3">
+                <span>
+                  {progress.current} of {progress.total} Campaigns
+                </span>
+                {onStopGeneration && (
+                  <button
+                    onClick={onStopGeneration}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition-colors normal-case tracking-normal"
+                  >
+                    <StopCircle className="w-3.5 h-3.5" />
+                    Stop
+                  </button>
+                )}
+              </div>
             </div>
             <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
               <div

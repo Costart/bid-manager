@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   fetchRawUrls,
   generateSingleCampaign,
@@ -127,6 +127,8 @@ export default function AdBuilderApp() {
   const [existingPaths, setExistingPaths] = useState<string[]>([]);
 
   const [languageGroups, setLanguageGroups] = useState<LanguageGroup[]>([]);
+
+  const stopGenerationRef = useRef(false);
 
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
@@ -384,6 +386,7 @@ export default function AdBuilderApp() {
       ? selectedPaths.length
       : selectedPaths.length * multiplyLangs.length;
 
+    stopGenerationRef.current = false;
     setTotalWork(totalCampaigns);
     setStatus(AnalysisStatus.GENERATING);
 
@@ -412,6 +415,7 @@ export default function AdBuilderApp() {
     let campaignIndex = 0;
 
     for (const langGroup of multiplyLangs) {
+      if (stopGenerationRef.current) break;
       const langCode = langGroup?.lang;
       const langLabel = langGroup
         ? ` [${langGroup.displayName}]`
@@ -422,6 +426,7 @@ export default function AdBuilderApp() {
       }
 
       for (const path of selectedPaths) {
+        if (stopGenerationRef.current) break;
         campaignIndex++;
 
         // For path-based languages, detect language from the path itself
@@ -520,15 +525,19 @@ export default function AdBuilderApp() {
     const allSelectedPaths = [...new Set([...existingPaths, ...selectedPaths])];
     setExistingPaths(allSelectedPaths);
 
-    if (successCount === 0 && failCount > 0) {
+    const wasStopped = stopGenerationRef.current;
+
+    if (successCount === 0 && failCount > 0 && !wasStopped) {
       setError(
         "All campaign generation attempts failed. Check your API key and try again.",
       );
       setStatus(AnalysisStatus.ERROR);
     } else {
       addLog(
-        `Batch processing complete. ${successCount} successful, ${failCount} failed.`,
-        "success",
+        wasStopped
+          ? `Stopped. ${successCount} campaigns generated before stopping.`
+          : `Batch processing complete. ${successCount} successful, ${failCount} failed.`,
+        wasStopped ? "warning" : "success",
       );
       setStatus(AnalysisStatus.COMPLETED);
       saveProjectUpdate({
@@ -736,6 +745,11 @@ export default function AdBuilderApp() {
       saveProjectUpdate({ siteAnalysis: updated });
       return updated;
     });
+  };
+
+  const handleStopGeneration = () => {
+    stopGenerationRef.current = true;
+    addLog("Stopping generation after current campaign...", "warning");
   };
 
   const handleRenameCampaign = (campaignId: string, newName: string) => {
@@ -1021,6 +1035,7 @@ export default function AdBuilderApp() {
             onCampaignsUploaded={handleCampaignsUploaded}
             onCampaignsSynced={handleCampaignsSynced}
             onRenameCampaign={handleRenameCampaign}
+            onStopGeneration={handleStopGeneration}
             progress={{
               current:
                 analysis.campaigns.length -
