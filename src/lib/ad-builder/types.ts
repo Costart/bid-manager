@@ -28,6 +28,8 @@ export interface AdGroup {
   googleAdsResourceName?: string;
   sitelinks?: Sitelink[];
   callouts?: string[];
+  images?: { landscape?: string; square?: string };
+  imagePrompt?: string;
 }
 
 export interface Campaign {

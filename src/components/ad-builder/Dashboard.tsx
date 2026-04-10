@@ -30,6 +30,7 @@ import {
   History,
   ShieldCheck,
   StopCircle,
+  ImageIcon,
 } from "lucide-react";
 
 interface DashboardProps {
@@ -43,6 +44,8 @@ interface DashboardProps {
   onCampaignsSynced?: (updatedCampaigns: Campaign[]) => void;
   onRenameCampaign?: (campaignId: string, newName: string) => void;
   onStopGeneration?: () => void;
+  onGenerateImages?: () => void;
+  isGeneratingImages?: boolean;
   progress?: {
     current: number;
     total: number;
@@ -63,6 +66,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   onCampaignsSynced,
   onRenameCampaign,
   onStopGeneration,
+  onGenerateImages,
+  isGeneratingImages = false,
   progress,
   debugInfo,
   aiHistory,
@@ -247,6 +252,26 @@ const Dashboard: React.FC<DashboardProps> = ({
                 ) : (
                   "Compliant"
                 )}
+              </button>
+            )}
+
+            {onGenerateImages && (
+              <button
+                onClick={onGenerateImages}
+                className="px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition flex items-center gap-1.5 text-xs font-medium disabled:bg-slate-300 disabled:cursor-not-allowed"
+                disabled={
+                  isGenerating ||
+                  isFixing ||
+                  isGeneratingImages ||
+                  analysis.campaigns.length === 0
+                }
+              >
+                {isGeneratingImages ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <ImageIcon className="w-3.5 h-3.5" />
+                )}
+                {isGeneratingImages ? "Generating..." : "Generate Images"}
               </button>
             )}
 
@@ -897,6 +922,31 @@ const Dashboard: React.FC<DashboardProps> = ({
                                   </span>
                                 </p>
                               ))}
+                            </div>
+                          )}
+
+                          {group.images && (group.images.landscape || group.images.square) && (
+                            <div>
+                              <p className="text-xs font-bold text-slate-500 mb-1">
+                                Images
+                              </p>
+                              <div className="flex gap-2">
+                                {group.images.landscape && (
+                                  <img
+                                    src={`/api/images/${group.images.landscape}`}
+                                    alt="Landscape"
+                                    className="h-16 rounded border border-slate-200 object-cover"
+                                    style={{ aspectRatio: "1200/628" }}
+                                  />
+                                )}
+                                {group.images.square && (
+                                  <img
+                                    src={`/api/images/${group.images.square}`}
+                                    alt="Square"
+                                    className="h-16 w-16 rounded border border-slate-200 object-cover"
+                                  />
+                                )}
+                              </div>
                             </div>
                           )}
 

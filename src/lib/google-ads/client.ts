@@ -625,6 +625,83 @@ export async function addCallouts(
   }
 }
 
+export async function addImageAssets(
+  accessToken: string,
+  customerId: string,
+  adGroupResourceName: string,
+  imageKeys: { landscape?: string; square?: string },
+  imagesFetcher: (key: string) => Promise<{ base64: string; mimeType: string }>,
+): Promise<void> {
+  const keysToUpload: { key: string; fieldType: string }[] = [];
+  if (imageKeys.landscape) {
+    keysToUpload.push({ key: imageKeys.landscape, fieldType: "AD_IMAGE" });
+  }
+  if (imageKeys.square) {
+    keysToUpload.push({ key: imageKeys.square, fieldType: "AD_IMAGE" });
+  }
+  if (keysToUpload.length === 0) return;
+
+  // Create image assets
+  const assetOps = [];
+  for (const item of keysToUpload) {
+    try {
+      const { base64 } = await imagesFetcher(item.key);
+      assetOps.push({
+        create: {
+          name: `Ad Image - ${item.key}`,
+          imageAsset: {
+            data: base64,
+          },
+        },
+      });
+    } catch (e) {
+      console.warn(`Failed to fetch image ${item.key}:`, e);
+    }
+  }
+
+  if (assetOps.length === 0) return;
+
+  const assetRes = await fetch(
+    `${BASE_URL}/customers/${customerId}/assets:mutate`,
+    {
+      method: "POST",
+      headers: apiHeaders(accessToken),
+      body: JSON.stringify({ operations: assetOps }),
+    },
+  );
+  if (!assetRes.ok) {
+    const text = await assetRes.text();
+    console.warn(`Image asset creation failed: ${text}`);
+    return;
+  }
+  const assetData = await assetRes.json();
+  const assetResourceNames: string[] = (assetData.results || []).map(
+    (r: any) => r.resourceName,
+  );
+
+  // Link assets to ad group
+  const linkOps = assetResourceNames.map((resourceName) => ({
+    create: {
+      adGroup: adGroupResourceName,
+      asset: resourceName,
+      fieldType: "AD_IMAGE",
+    },
+  }));
+
+  const linkRes = await fetch(
+    `${BASE_URL}/customers/${customerId}/adGroupAssets:mutate`,
+    {
+      method: "POST",
+      headers: apiHeaders(accessToken),
+      body: JSON.stringify({ operations: linkOps }),
+    },
+  );
+  if (!linkRes.ok) {
+    const text = await linkRes.text();
+    console.warn(`Image ad group link failed: ${text}`);
+  }
+}
+
 const DATE_RANGE_MAP: Record<number, string> = {
   7: "LAST_7_DAYS",
   14: "LAST_14_DAYS",

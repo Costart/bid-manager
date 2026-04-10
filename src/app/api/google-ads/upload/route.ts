@@ -16,7 +16,9 @@ import {
   setCampaignLanguageTarget,
   addSitelinks,
   addCallouts,
+  addImageAssets,
 } from "@/lib/google-ads/client";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { Campaign } from "@/lib/ad-builder/types";
 
 interface CampaignResult {
@@ -205,6 +207,37 @@ export async function POST(request: Request) {
               console.warn(
                 `Callouts for "${ag.name}" failed:`,
                 coErr instanceof Error ? coErr.message : coErr,
+              );
+            }
+          }
+
+          // Upload images if present
+          if (ag.images && (ag.images.landscape || ag.images.square)) {
+            try {
+              const { env } = getCloudflareContext();
+              const bucket = (env as any).IMAGES;
+
+              await addImageAssets(
+                accessToken,
+                customerId,
+                adGroupResource,
+                ag.images,
+                async (key: string) => {
+                  const obj = await bucket.get(key);
+                  if (!obj) throw new Error(`Image not found: ${key}`);
+                  const arrayBuffer = await obj.arrayBuffer();
+                  const bytes = new Uint8Array(arrayBuffer);
+                  let binary = "";
+                  for (let i = 0; i < bytes.length; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                  }
+                  return { base64: btoa(binary), mimeType: "image/jpeg" };
+                },
+              );
+            } catch (imgErr) {
+              console.warn(
+                `Images for "${ag.name}" failed:`,
+                imgErr instanceof Error ? imgErr.message : imgErr,
               );
             }
           }
