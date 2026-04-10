@@ -39,17 +39,21 @@ async function fetchUrlContent(targetUrl: string): Promise<string | null> {
   for (const proxy of PROXIES) {
     try {
       const isOwnProxy = proxy.startsWith("/");
+      const fullUrl = proxy + encodeURIComponent(targetUrl);
+      console.log(`[proxy] Trying: ${fullUrl.slice(0, 100)}`);
       const response = await fetchWithTimeout(
-        proxy + encodeURIComponent(targetUrl),
+        fullUrl,
         {},
         isOwnProxy ? 12000 : 6000,
       );
+      console.log(`[proxy] ${response.status} for ${targetUrl.slice(0, 60)}`);
       if (response.ok) {
         const text = await response.text();
         if (text && text.length > 50) return text;
+        console.log(`[proxy] Response too short (${text.length} chars)`);
       }
-    } catch {
-      // Silently fail over to next proxy
+    } catch (e) {
+      console.log(`[proxy] Error for ${targetUrl.slice(0, 60)}:`, e);
     }
   }
   return null;
