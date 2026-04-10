@@ -329,7 +329,7 @@ const FolderMapper: React.FC<FolderMapperProps> = ({
         >
           <span>
             Generate{" "}
-            {activeLanguageGroups.length > 1
+            {activeLanguageGroups.length > 1 && activeLanguageGroups[0]?.source === "hreflang"
               ? `${selectedPaths.size} x ${activeLanguageGroups.length} Languages`
               : `${selectedPaths.size} Campaigns`}
           </span>

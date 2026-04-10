@@ -315,7 +315,8 @@ export function groupUrlsByLanguage(
   }
 
   // Fallback: if no hreflang data, detect language from URL path prefixes (e.g. /en/, /es/)
-  if (urlToLang.size === 0) {
+  const isPathBased = urlToLang.size === 0;
+  if (isPathBased) {
     for (const url of urls) {
       const lang = detectLangFromUrlPath(url);
       if (lang) urlToLang.set(url, lang);
@@ -336,10 +337,12 @@ export function groupUrlsByLanguage(
   // If only one language found, no need to split
   if (groups.size <= 1) return [];
 
+  const source = isPathBased ? "path" : "hreflang";
   return Array.from(groups.entries()).map(([lang, langUrls]) => ({
     lang,
     displayName: getLanguageDisplayName(lang),
     urls: langUrls,
+    source: source as "hreflang" | "path",
   }));
 }
 

@@ -7,6 +7,7 @@ export interface LanguageGroup {
   lang: string;
   displayName: string;
   urls: string[];
+  source: "hreflang" | "path";
 }
 
 export interface AdGroup {

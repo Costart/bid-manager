@@ -40,6 +40,7 @@ interface DashboardProps {
   onFixCompliance?: () => void;
   onCampaignsUploaded?: (mappings: import("@/components/ad-builder/GoogleAdsUpload").UploadedMapping[]) => void;
   onCampaignsSynced?: (updatedCampaigns: Campaign[]) => void;
+  onRenameCampaign?: (campaignId: string, newName: string) => void;
   progress?: {
     current: number;
     total: number;
@@ -58,6 +59,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   onFixCompliance,
   onCampaignsUploaded,
   onCampaignsSynced,
+  onRenameCampaign,
   progress,
   debugInfo,
   aiHistory,
@@ -70,6 +72,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   useEffect(() => {
     if (isGenerating) setShowDebug(true);
@@ -536,7 +540,38 @@ const Dashboard: React.FC<DashboardProps> = ({
                             <td className="py-4 px-6 align-top">
                               {gIdx === 0 && (
                                 <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                                  {camp.name}
+                                  {editingCampaignId === camp.id ? (
+                                    <input
+                                      className="font-bold text-sm text-slate-800 bg-white border border-blue-400 rounded px-2 py-0.5 outline-none focus:ring-2 focus:ring-blue-200 min-w-[120px]"
+                                      value={editingName}
+                                      onChange={(e) => setEditingName(e.target.value)}
+                                      onBlur={() => {
+                                        if (editingName.trim() && editingName !== camp.name && onRenameCampaign) {
+                                          onRenameCampaign(camp.id, editingName.trim());
+                                        }
+                                        setEditingCampaignId(null);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          (e.target as HTMLInputElement).blur();
+                                        } else if (e.key === "Escape") {
+                                          setEditingCampaignId(null);
+                                        }
+                                      }}
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <span
+                                      className="cursor-pointer hover:text-blue-600 transition-colors"
+                                      onDoubleClick={() => {
+                                        setEditingCampaignId(camp.id);
+                                        setEditingName(camp.name);
+                                      }}
+                                      title="Double-click to rename"
+                                    >
+                                      {camp.name}
+                                    </span>
+                                  )}
                                   {camp.language && (
                                     <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold uppercase">
                                       {camp.language}

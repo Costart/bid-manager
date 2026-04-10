@@ -369,21 +369,29 @@ export default function AdBuilderApp() {
   ) => {
     if (!mappingResult || !aiConfig) return;
 
-    // Use selected languages from FolderMapper, fall back to all detected, or null for single-lang
-    const langs =
-      selectedLanguages && selectedLanguages.length > 0
-        ? selectedLanguages
-        : languageGroups.length > 0
-          ? languageGroups
-          : [null];
-    const totalCampaigns = selectedPaths.length * langs.length;
+    // Determine generation strategy based on language source
+    const activeLangs = selectedLanguages && selectedLanguages.length > 0
+      ? selectedLanguages
+      : languageGroups.length > 0
+        ? languageGroups
+        : [];
+
+    // Path-based languages: URLs already contain the language, don't multiply
+    // Hreflang-based languages: same paths exist in multiple languages, multiply
+    const isPathBased = activeLangs.length > 0 && activeLangs[0].source === "path";
+    const multiplyLangs = !isPathBased && activeLangs.length > 0 ? activeLangs : [null];
+    const totalCampaigns = isPathBased
+      ? selectedPaths.length
+      : selectedPaths.length * multiplyLangs.length;
 
     setTotalWork(totalCampaigns);
     setStatus(AnalysisStatus.GENERATING);
 
     const langInfo =
-      languageGroups.length > 0
-        ? ` across ${languageGroups.length} languages`
+      activeLangs.length > 0
+        ? isPathBased
+          ? ` (language detected from URL paths)`
+          : ` across ${activeLangs.length} languages`
         : "";
     addLog(
       `Starting batched generation for ${totalCampaigns} campaigns${langInfo} (${aiConfig.model})...`,
@@ -403,7 +411,7 @@ export default function AdBuilderApp() {
     let failCount = 0;
     let campaignIndex = 0;
 
-    for (const langGroup of langs) {
+    for (const langGroup of multiplyLangs) {
       const langCode = langGroup?.lang;
       const langLabel = langGroup
         ? ` [${langGroup.displayName}]`
@@ -415,6 +423,16 @@ export default function AdBuilderApp() {
 
       for (const path of selectedPaths) {
         campaignIndex++;
+
+        // For path-based languages, detect language from the path itself
+        let effectiveLangCode = langCode;
+        if (isPathBased) {
+          const pathLang = detectLangFromUrlPath(
+            `https://example.com${path.startsWith("/") ? path : "/" + path}`,
+          );
+          effectiveLangCode = pathLang || undefined;
+        }
+
         try {
           const node = findNodeByPath(mappingResult.folders, path);
           if (!node) {
@@ -422,9 +440,13 @@ export default function AdBuilderApp() {
             continue;
           }
 
-          setCurrentProcessingEntity(`${node.name}${langLabel}`);
+          const effectiveLangLabel = effectiveLangCode
+            ? ` [${effectiveLangCode.toUpperCase()}]`
+            : "";
+
+          setCurrentProcessingEntity(`${node.name}${effectiveLangLabel}`);
           addLog(
-            `Generating Campaign ${campaignIndex}/${totalCampaigns}: ${node.name}${langLabel}...`,
+            `Generating Campaign ${campaignIndex}/${totalCampaigns}: ${node.name}${effectiveLangLabel}...`,
             "info",
           );
 
@@ -471,7 +493,7 @@ export default function AdBuilderApp() {
                 setAiHistory((prev) => [entry, ...prev]);
               }
             },
-            langCode,
+            effectiveLangCode,
           );
 
           setAnalysis((prev) => {
@@ -710,6 +732,20 @@ export default function AdBuilderApp() {
             })),
           };
         }),
+      };
+      saveProjectUpdate({ siteAnalysis: updated });
+      return updated;
+    });
+  };
+
+  const handleRenameCampaign = (campaignId: string, newName: string) => {
+    setAnalysis((prev) => {
+      if (!prev) return null;
+      const updated = {
+        ...prev,
+        campaigns: prev.campaigns.map((c) =>
+          c.id === campaignId ? { ...c, name: newName } : c,
+        ),
       };
       saveProjectUpdate({ siteAnalysis: updated });
       return updated;
@@ -984,6 +1020,7 @@ export default function AdBuilderApp() {
             onFixCompliance={handleFixCompliance}
             onCampaignsUploaded={handleCampaignsUploaded}
             onCampaignsSynced={handleCampaignsSynced}
+            onRenameCampaign={handleRenameCampaign}
             progress={{
               current:
                 analysis.campaigns.length -
