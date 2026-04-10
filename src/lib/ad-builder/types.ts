@@ -28,8 +28,6 @@ export interface AdGroup {
   googleAdsResourceName?: string;
   sitelinks?: Sitelink[];
   callouts?: string[];
-  images?: { landscape?: string; square?: string };
-  imagePrompt?: string;
 }
 
 export interface Campaign {
@@ -45,6 +43,8 @@ export interface Campaign {
   googleAdsCustomerId?: string;
   googleAdsStatus?: "ENABLED" | "PAUSED" | "REMOVED";
   lastSyncedAt?: string;
+  images?: { landscape?: string; square?: string };
+  imagePrompt?: string;
 }
 
 export interface FolderNode {

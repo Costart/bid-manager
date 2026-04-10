@@ -628,7 +628,7 @@ export async function addCallouts(
 export async function addImageAssets(
   accessToken: string,
   customerId: string,
-  adGroupResourceName: string,
+  campaignResourceName: string,
   imageKeys: { landscape?: string; square?: string },
   imagesFetcher: (key: string) => Promise<{ base64: string; mimeType: string }>,
 ): Promise<void> {
@@ -679,17 +679,17 @@ export async function addImageAssets(
     (r: any) => r.resourceName,
   );
 
-  // Link assets to ad group
+  // Link assets to campaign
   const linkOps = assetResourceNames.map((resourceName) => ({
     create: {
-      adGroup: adGroupResourceName,
+      campaign: campaignResourceName,
       asset: resourceName,
       fieldType: "AD_IMAGE",
     },
   }));
 
   const linkRes = await fetch(
-    `${BASE_URL}/customers/${customerId}/adGroupAssets:mutate`,
+    `${BASE_URL}/customers/${customerId}/campaignAssets:mutate`,
     {
       method: "POST",
       headers: apiHeaders(accessToken),

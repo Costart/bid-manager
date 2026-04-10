@@ -769,80 +769,77 @@ export default function AdBuilderApp() {
   const handleGenerateImages = async () => {
     if (!analysis || !aiConfig) return;
     setIsGeneratingImages(true);
+    stopGenerationRef.current = false;
 
-    // Collect ad groups that don't have images yet (skip DSA groups)
-    const targets: { campIdx: number; agIdx: number; context: string; lang?: string }[] = [];
-    analysis.campaigns.forEach((camp, cIdx) => {
-      camp.adGroups.forEach((ag, aIdx) => {
-        if (ag.isDSA) return;
-        if (ag.images?.landscape && ag.images?.square) return;
-        const context = `${camp.name} - ${ag.name}\nKeywords: ${ag.keywords.slice(0, 5).join(", ")}\nLanding: ${ag.landingPageUrl}`;
-        targets.push({ campIdx: cIdx, agIdx: aIdx, context, lang: camp.language });
-      });
-    });
+    // Collect campaigns that don't have images yet
+    const targets = analysis.campaigns
+      .map((camp, idx) => ({ camp, idx }))
+      .filter(({ camp }) => !camp.images?.landscape || !camp.images?.square);
 
     if (targets.length === 0) {
-      addLog("All ad groups already have images.", "success");
+      addLog("All campaigns already have images.", "success");
       setIsGeneratingImages(false);
       return;
     }
 
-    addLog(`Generating images for ${targets.length} ad groups...`, "info");
+    addLog(`Generating images for ${targets.length} campaigns...`, "info");
 
     let completed = 0;
-    for (const target of targets) {
+    for (const { camp, idx: campIdx } of targets) {
       if (stopGenerationRef.current) {
         addLog("Image generation stopped.", "warning");
         break;
       }
 
-      const camp = analysis.campaigns[target.campIdx];
-      const ag = camp.adGroups[target.agIdx];
       completed++;
-
       addLog(
-        `Image ${completed}/${targets.length}: ${ag.name}...`,
+        `Image ${completed}/${targets.length}: ${camp.name}...`,
         "info",
       );
 
       try {
+        // Build context from campaign's ad groups
+        const keywords = camp.adGroups
+          .filter((ag) => !ag.isDSA)
+          .flatMap((ag) => ag.keywords)
+          .slice(0, 10);
+        const pages = camp.adGroups
+          .filter((ag) => !ag.isDSA)
+          .map((ag) => ag.name)
+          .join(", ");
+        const context = `Campaign: ${camp.name}\nPages: ${pages}\nKeywords: ${keywords.join(", ")}`;
+
         // Step 1: Generate image prompt
         const imagePrompt = await generateImagePrompt(
           aiConfig,
-          target.context,
-          target.lang,
+          context,
+          camp.language,
         );
 
         // Step 2: Generate and upload images
         const images = await generateAdGroupImages(
           aiConfig,
           imagePrompt,
-          ag.id,
+          camp.id,
         );
 
-        // Step 3: Update ad group with image data
+        // Step 3: Update campaign with image data
         setAnalysis((prev) => {
           if (!prev) return null;
           const updated = {
             ...prev,
             campaigns: prev.campaigns.map((c, ci) => {
-              if (ci !== target.campIdx) return c;
-              return {
-                ...c,
-                adGroups: c.adGroups.map((a, ai) => {
-                  if (ai !== target.agIdx) return a;
-                  return { ...a, images, imagePrompt };
-                }),
-              };
+              if (ci !== campIdx) return c;
+              return { ...c, images, imagePrompt };
             }),
           };
           saveProjectUpdate({ siteAnalysis: updated });
           return updated;
         });
 
-        addLog(`Images generated for ${ag.name}`, "success");
+        addLog(`Images generated for ${camp.name}`, "success");
       } catch (e: any) {
-        addLog(`Image failed for ${ag.name}: ${e.message}`, "warning");
+        addLog(`Image failed for ${camp.name}: ${e.message}`, "warning");
       }
     }
 

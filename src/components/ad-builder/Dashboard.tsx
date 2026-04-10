@@ -850,6 +850,31 @@ const Dashboard: React.FC<DashboardProps> = ({
                           {camp.adGroups.length} Ad Groups
                         </p>
                       </div>
+                      {camp.images && (camp.images.landscape || camp.images.square) && (
+                        <div className="flex gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          {camp.images.landscape && (
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-400 mb-1 uppercase">Landscape</p>
+                              <img
+                                src={`/api/images/${camp.images.landscape}`}
+                                alt="Landscape"
+                                className="h-20 rounded-lg border border-slate-200 object-cover"
+                                style={{ aspectRatio: "1200/628" }}
+                              />
+                            </div>
+                          )}
+                          {camp.images.square && (
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-400 mb-1 uppercase">Square</p>
+                              <img
+                                src={`/api/images/${camp.images.square}`}
+                                alt="Square"
+                                className="h-20 w-20 rounded-lg border border-slate-200 object-cover"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {camp.adGroups.map((group) => (
                         <div
                           key={group.id}
@@ -922,31 +947,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                                   </span>
                                 </p>
                               ))}
-                            </div>
-                          )}
-
-                          {group.images && (group.images.landscape || group.images.square) && (
-                            <div>
-                              <p className="text-xs font-bold text-slate-500 mb-1">
-                                Images
-                              </p>
-                              <div className="flex gap-2">
-                                {group.images.landscape && (
-                                  <img
-                                    src={`/api/images/${group.images.landscape}`}
-                                    alt="Landscape"
-                                    className="h-16 rounded border border-slate-200 object-cover"
-                                    style={{ aspectRatio: "1200/628" }}
-                                  />
-                                )}
-                                {group.images.square && (
-                                  <img
-                                    src={`/api/images/${group.images.square}`}
-                                    alt="Square"
-                                    className="h-16 w-16 rounded border border-slate-200 object-cover"
-                                  />
-                                )}
-                              </div>
                             </div>
                           )}
 

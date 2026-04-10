@@ -211,43 +211,43 @@ export async function POST(request: Request) {
             }
           }
 
-          // Upload images if present
-          if (ag.images && (ag.images.landscape || ag.images.square)) {
-            try {
-              const { env } = getCloudflareContext();
-              const bucket = (env as any).IMAGES;
-
-              await addImageAssets(
-                accessToken,
-                customerId,
-                adGroupResource,
-                ag.images,
-                async (key: string) => {
-                  const obj = await bucket.get(key);
-                  if (!obj) throw new Error(`Image not found: ${key}`);
-                  const arrayBuffer = await obj.arrayBuffer();
-                  const bytes = new Uint8Array(arrayBuffer);
-                  let binary = "";
-                  for (let i = 0; i < bytes.length; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                  }
-                  return { base64: btoa(binary), mimeType: "image/jpeg" };
-                },
-              );
-            } catch (imgErr) {
-              console.warn(
-                `Images for "${ag.name}" failed:`,
-                imgErr instanceof Error ? imgErr.message : imgErr,
-              );
-            }
-          }
-
           adGroupResourceMap[ag.id] = adGroupResource;
           adGroupCount++;
         } catch (agErr) {
           console.error(
             `Ad group "${ag.name}" failed:`,
             agErr instanceof Error ? agErr.message : agErr,
+          );
+        }
+      }
+
+      // Upload campaign-level images if present
+      if (campaign.images && (campaign.images.landscape || campaign.images.square)) {
+        try {
+          const { env } = getCloudflareContext();
+          const bucket = (env as any).IMAGES;
+
+          await addImageAssets(
+            accessToken,
+            customerId,
+            campaignResource,
+            campaign.images,
+            async (key: string) => {
+              const obj = await bucket.get(key);
+              if (!obj) throw new Error(`Image not found: ${key}`);
+              const arrayBuffer = await obj.arrayBuffer();
+              const bytes = new Uint8Array(arrayBuffer);
+              let binary = "";
+              for (let i = 0; i < bytes.length; i++) {
+                binary += String.fromCharCode(bytes[i]);
+              }
+              return { base64: btoa(binary), mimeType: "image/jpeg" };
+            },
+          );
+        } catch (imgErr) {
+          console.warn(
+            `Images for campaign "${campaign.name}" failed:`,
+            imgErr instanceof Error ? imgErr.message : imgErr,
           );
         }
       }
