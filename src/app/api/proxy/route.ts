@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const TIMEOUT_MS = 10000;
 
 export async function GET(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { searchParams } = new URL(request.url);
   const targetUrl = searchParams.get("url");
 
@@ -33,7 +27,7 @@ export async function GET(request: Request) {
       signal: controller.signal,
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (compatible; BidManager/1.0; +https://bid-manager.costart-projects.workers.dev)",
+          "Mozilla/5.0 (compatible; BidManager/1.0)",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
       redirect: "follow",
@@ -43,7 +37,7 @@ export async function GET(request: Request) {
 
     if (!res.ok) {
       return NextResponse.json(
-        { error: `Upstream returned ${res.status}` },
+        { error: `Upstream ${res.status}` },
         { status: 502 },
       );
     }
@@ -58,13 +52,7 @@ export async function GET(request: Request) {
 
     const text = await res.text();
 
-    if (text.length > MAX_SIZE) {
-      return new NextResponse(text.slice(0, MAX_SIZE), {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      });
-    }
-
-    return new NextResponse(text, {
+    return new NextResponse(text.length > MAX_SIZE ? text.slice(0, MAX_SIZE) : text, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   } catch (err) {
